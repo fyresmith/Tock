@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
+use crate::backup;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub hourly_rate: String,
@@ -8,9 +10,12 @@ pub struct Settings {
     pub user_name: String,
     pub user_email: String,
     pub employer_name: String,
+    pub backup_directory: String,
+    pub auto_backup_enabled: bool,
     pub backup_csv_path: String,
     pub theme: String,
     pub invoice_notes: String,
+    pub time_rounding: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,28 +63,56 @@ async fn get_setting_value(pool: &SqlitePool, key: &str) -> String {
 }
 
 #[tauri::command]
-pub async fn get_settings(pool: tauri::State<'_, SqlitePool>) -> Result<Settings, String> {
+pub async fn get_settings(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+) -> Result<Settings, String> {
+    let backup_directory = {
+        let configured = get_setting_value(pool.inner(), "backup_directory").await;
+        if configured.trim().is_empty() {
+            crate::db::app_data_dir(&app)?
+                .join("backups")
+                .display()
+                .to_string()
+        } else {
+            configured
+        }
+    };
+    let auto_backup_enabled = !matches!(
+        get_setting_value(pool.inner(), "auto_backup_enabled")
+            .await
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "0" | "false" | "off"
+    );
+
     Ok(Settings {
         hourly_rate: get_setting_value(pool.inner(), "hourly_rate").await,
         currency: get_setting_value(pool.inner(), "currency").await,
         user_name: get_setting_value(pool.inner(), "user_name").await,
         user_email: get_setting_value(pool.inner(), "user_email").await,
         employer_name: get_setting_value(pool.inner(), "employer_name").await,
+        backup_directory,
+        auto_backup_enabled,
         backup_csv_path: get_setting_value(pool.inner(), "backup_csv_path").await,
         theme: get_setting_value(pool.inner(), "theme").await,
         invoice_notes: get_setting_value(pool.inner(), "invoice_notes").await,
+        time_rounding: get_setting_value(pool.inner(), "time_rounding").await,
     })
 }
 
 #[tauri::command]
 pub async fn update_setting(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     key: String,
     value: String,
 ) -> Result<Settings, String> {
     let allowed = [
         "hourly_rate", "currency", "user_name", "user_email",
-        "employer_name", "backup_csv_path", "theme", "invoice_notes",
+        "employer_name", "backup_directory", "auto_backup_enabled",
+        "backup_csv_path", "theme", "invoice_notes", "time_rounding",
     ];
     if !allowed.contains(&key.as_str()) {
         return Err(format!("Unknown setting key: {}", key));
@@ -92,7 +125,8 @@ pub async fn update_setting(
         .await
         .map_err(|e| e.to_string())?;
 
-    get_settings(pool).await
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "settings-update").await;
+    get_settings(pool, app).await
 }
 
 #[tauri::command]

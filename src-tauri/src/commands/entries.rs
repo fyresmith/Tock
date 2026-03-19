@@ -3,6 +3,7 @@ use serde::Deserialize;
 use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use uuid::Uuid;
 
+use crate::backup;
 use crate::commands::invoices::{ensure_invoice_editable, sync_invoice_totals};
 use crate::commands::tags::{get_default_active_tag, get_selectable_tag, get_tag_by_id};
 use crate::commands::timer::{compute_duration, fetch_time_entry_by_id, TimeEntry, TIME_ENTRY_SELECT};
@@ -19,6 +20,8 @@ pub struct CreateEntryArgs {
     pub description: String,
     pub tag_id: String,
     pub client_id: Option<String>,
+    pub billable: Option<bool>,
+    pub hourly_rate: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +33,8 @@ pub struct UpdateEntryArgs {
     pub duration_minutes: Option<i64>,
     pub description: Option<String>,
     pub tag_id: Option<String>,
+    pub billable: Option<bool>,
+    pub hourly_rate: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,6 +44,54 @@ pub struct ListEntriesArgs {
     pub search: Option<String>,
     pub tag_id: Option<String>,
     pub invoiced: Option<bool>,
+    pub billable: Option<bool>,
+}
+
+async fn check_overlap(
+    pool: &SqlitePool,
+    date: &str,
+    start_time: &str,
+    end_time: &str,
+    exclude_id: Option<&str>,
+) -> Result<(), String> {
+    let row: Option<(String, String)> = if let Some(id) = exclude_id {
+        sqlx::query_as(
+            "SELECT start_time, end_time FROM time_entries
+             WHERE date = ? AND end_time IS NOT NULL
+               AND end_time > ? AND start_time < ?
+               AND id != ?
+             LIMIT 1",
+        )
+        .bind(date)
+        .bind(start_time)
+        .bind(end_time)
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query_as(
+            "SELECT start_time, end_time FROM time_entries
+             WHERE date = ? AND end_time IS NOT NULL
+               AND end_time > ? AND start_time < ?
+             LIMIT 1",
+        )
+        .bind(date)
+        .bind(start_time)
+        .bind(end_time)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    };
+
+    if let Some((s, e)) = row {
+        return Err(format!(
+            "Overlaps with existing entry ({}–{})",
+            &s[..5],
+            &e[..5]
+        ));
+    }
+    Ok(())
 }
 
 fn list_query_base() -> QueryBuilder<'static, Sqlite> {
@@ -54,19 +107,23 @@ fn list_query_base() -> QueryBuilder<'static, Sqlite> {
 #[tauri::command]
 pub async fn create_entry(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     args: CreateEntryArgs,
 ) -> Result<TimeEntry, String> {
+    check_overlap(pool.inner(), &args.date, &args.start_time, &args.end_time, None).await?;
+
     let id = Uuid::new_v4().to_string();
     let now = now_iso();
     let duration = compute_duration(&args.start_time, &args.end_time);
     let tag = get_selectable_tag(pool.inner(), &args.tag_id).await?;
+    let billable = args.billable.unwrap_or(true);
 
     sqlx::query(
         "INSERT INTO time_entries (
             id, date, start_time, end_time, duration_minutes, description, entry_type, tag_id,
-            client_id, invoiced, invoice_id, created_at, updated_at
+            client_id, invoiced, invoice_id, billable, hourly_rate, created_at, updated_at
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&args.date)
@@ -77,18 +134,23 @@ pub async fn create_entry(
     .bind(&tag.name)
     .bind(&tag.id)
     .bind(&args.client_id)
+    .bind(billable)
+    .bind(args.hourly_rate)
     .bind(&now)
     .bind(&now)
     .execute(pool.inner())
     .await
     .map_err(|e| e.to_string())?;
 
-    fetch_time_entry_by_id(pool.inner(), &id).await
+    let entry = fetch_time_entry_by_id(pool.inner(), &id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "entry-create").await;
+    Ok(entry)
 }
 
 #[tauri::command]
 pub async fn update_entry(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     args: UpdateEntryArgs,
 ) -> Result<TimeEntry, String> {
     let now = now_iso();
@@ -102,6 +164,12 @@ pub async fn update_entry(
     let start_time = args.start_time.unwrap_or(current.start_time.clone());
     let end_time_val = args.end_time.or(current.end_time.clone());
     let description = args.description.unwrap_or(current.description.clone());
+    let billable = args.billable.unwrap_or(current.billable);
+    let hourly_rate = args.hourly_rate;
+
+    if let Some(ref end) = end_time_val {
+        check_overlap(pool.inner(), &date, &start_time, end, Some(&args.id)).await?;
+    }
 
     let tag = if let Some(ref next_tag_id) = args.tag_id {
         if current.tag_id.as_deref() == Some(next_tag_id.as_str()) {
@@ -123,7 +191,7 @@ pub async fn update_entry(
 
     sqlx::query(
         "UPDATE time_entries
-         SET date = ?, start_time = ?, end_time = ?, duration_minutes = ?, description = ?, entry_type = ?, tag_id = ?, updated_at = ?
+         SET date = ?, start_time = ?, end_time = ?, duration_minutes = ?, description = ?, entry_type = ?, tag_id = ?, billable = ?, hourly_rate = ?, updated_at = ?
          WHERE id = ?",
     )
     .bind(&date)
@@ -133,6 +201,8 @@ pub async fn update_entry(
     .bind(&description)
     .bind(&tag.name)
     .bind(&tag.id)
+    .bind(billable)
+    .bind(hourly_rate)
     .bind(&now)
     .bind(&args.id)
     .execute(pool.inner())
@@ -143,12 +213,15 @@ pub async fn update_entry(
         sync_invoice_totals(pool.inner(), invoice_id).await?;
     }
 
-    fetch_time_entry_by_id(pool.inner(), &args.id).await
+    let entry = fetch_time_entry_by_id(pool.inner(), &args.id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "entry-update").await;
+    Ok(entry)
 }
 
 #[tauri::command]
 pub async fn delete_entry(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     id: String,
 ) -> Result<(), String> {
     let current = fetch_time_entry_by_id(pool.inner(), &id).await?;
@@ -166,6 +239,88 @@ pub async fn delete_entry(
         sync_invoice_totals(pool.inner(), invoice_id).await?;
     }
 
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "entry-delete").await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn bulk_delete_entries(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let mut invoice_ids_to_sync: Vec<String> = Vec::new();
+
+    for id in &ids {
+        let current = fetch_time_entry_by_id(pool.inner(), id).await?;
+        if let Some(ref invoice_id) = current.invoice_id {
+            ensure_invoice_editable(pool.inner(), invoice_id).await?;
+            if !invoice_ids_to_sync.contains(invoice_id) {
+                invoice_ids_to_sync.push(invoice_id.clone());
+            }
+        }
+    }
+
+    let mut tx = pool.inner().begin().await.map_err(|e| e.to_string())?;
+    for id in &ids {
+        sqlx::query("DELETE FROM time_entries WHERE id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    for invoice_id in &invoice_ids_to_sync {
+        let _ = sync_invoice_totals(pool.inner(), invoice_id).await;
+    }
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "entry-bulk-delete").await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn bulk_update_tag(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+    tag_id: String,
+) -> Result<(), String> {
+    let tag = get_selectable_tag(pool.inner(), &tag_id).await?;
+    let now = now_iso();
+
+    let mut editable_ids: Vec<String> = Vec::new();
+    for id in &ids {
+        let current = fetch_time_entry_by_id(pool.inner(), id).await?;
+        if let Some(ref invoice_id) = current.invoice_id {
+            if ensure_invoice_editable(pool.inner(), invoice_id).await.is_ok() {
+                editable_ids.push(id.clone());
+            }
+        } else {
+            editable_ids.push(id.clone());
+        }
+    }
+
+    if editable_ids.is_empty() {
+        return Ok(());
+    }
+
+    let mut tx = pool.inner().begin().await.map_err(|e| e.to_string())?;
+    for id in &editable_ids {
+        sqlx::query(
+            "UPDATE time_entries SET tag_id = ?, entry_type = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(&tag.id)
+        .bind(&tag.name)
+        .bind(&now)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "entry-bulk-update-tag").await;
     Ok(())
 }
 
@@ -195,6 +350,10 @@ pub async fn list_entries(
     if let Some(invoiced) = args.invoiced {
         query.push(" AND time_entries.invoiced = ");
         query.push_bind(if invoiced { 1 } else { 0 });
+    }
+    if let Some(billable) = args.billable {
+        query.push(" AND time_entries.billable = ");
+        query.push_bind(if billable { 1_i64 } else { 0_i64 });
     }
 
     query.push(" ORDER BY time_entries.date DESC, time_entries.start_time DESC");

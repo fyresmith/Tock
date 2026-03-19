@@ -5,9 +5,11 @@ import {
   createInvoice,
   issueInvoice,
   revertInvoiceToDraft,
+  cancelInvoice,
   sendInvoice,
   markInvoicePaid,
   getInvoiceEntries,
+  saveInvoicePdf as saveInvoicePdfCmd,
   deleteInvoice as deleteInvoiceCmd,
   Invoice,
   InvoiceFormat,
@@ -83,6 +85,14 @@ export function useInvoices() {
     return updated;
   }, []);
 
+  const cancel = useCallback(async (invoiceId: string) => {
+    const updated = await cancelInvoice(invoiceId);
+    setInvoices((prev) =>
+      prev.map((inv) => (inv.id === updated.id ? updated : inv))
+    );
+    return updated;
+  }, []);
+
   const send = useCallback(async (invoiceId: string, sentAt: string) => {
     const updated = await sendInvoice(invoiceId, sentAt);
     setInvoices((prev) =>
@@ -106,6 +116,14 @@ export function useInvoices() {
     []
   );
 
+  const savePdf = useCallback(async (invoiceId: string, path: string, bytes: number[]) => {
+    const updated = await saveInvoicePdfCmd(invoiceId, path, bytes);
+    setInvoices((prev) =>
+      prev.map((inv) => (inv.id === updated.id ? updated : inv))
+    );
+    return updated;
+  }, []);
+
   const deleteInvoice = useCallback(async (invoiceId: string) => {
     await deleteInvoiceCmd(invoiceId);
     setInvoices((prev) => prev.filter((inv) => inv.id !== invoiceId));
@@ -120,9 +138,11 @@ export function useInvoices() {
     create,
     issue,
     revertToDraft,
+    cancel,
     send,
     markPaid,
     fetchEntries,
+    savePdf,
     deleteInvoice,
   };
 }

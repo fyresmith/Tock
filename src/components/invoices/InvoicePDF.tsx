@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Invoice, InvoicePreview, Settings, TimeEntry } from "../../lib/commands";
+import { getBilledEntry, getInvoiceRateLabel, summarizeInvoiceEntries } from "../../lib/billing";
 import { formatDate, formatTime, formatCurrency } from "../../lib/dateUtils";
 
 // ── Design constants ──────────────────────────────────────────────
@@ -26,6 +27,10 @@ interface InvoicePdfData {
   issued_at: string;
 }
 
+export interface InvoicePdfOptions {
+  billedToName?: string | null;
+}
+
 function toInvoicePdfData(invoice: Invoice | InvoicePreview): InvoicePdfData {
   if ("created_at" in invoice) {
     return {
@@ -38,7 +43,7 @@ function toInvoicePdfData(invoice: Invoice | InvoicePreview): InvoicePdfData {
       format: invoice.format,
       layout_data: invoice.layout_data,
       name: invoice.name,
-      issued_at: invoice.created_at,
+      issued_at: invoice.issued_at ?? invoice.created_at,
     };
   }
 
@@ -56,7 +61,7 @@ function toInvoicePdfData(invoice: Invoice | InvoicePreview): InvoicePdfData {
   };
 }
 
-function invoiceFilename(invoice: Invoice | InvoicePreview): string {
+export function invoiceFilename(invoice: Invoice | InvoicePreview): string {
   if (invoice.name) {
     return `${invoice.name.replace(/[^a-z0-9]/gi, "_")}.pdf`;
   }
@@ -71,7 +76,12 @@ function invoiceFilename(invoice: Invoice | InvoicePreview): string {
 // ── Shared header ─────────────────────────────────────────────────
 // Pure typography — no fills, no bands. One thin accent rule is the only
 // decorative element.  Returns Y after the bottom divider.
-function drawSharedHeader(doc: jsPDF, invoice: InvoicePdfData, settings: Settings): number {
+function drawSharedHeader(
+  doc: jsPDF,
+  invoice: InvoicePdfData,
+  settings: Settings,
+  billedToName?: string | null
+): number {
   const pageWidth = doc.internal.pageSize.getWidth();
   const usableW   = pageWidth - MARGIN * 2;
   let y = MARGIN;
@@ -162,7 +172,7 @@ function drawSharedHeader(doc: jsPDF, invoice: InvoicePdfData, settings: Setting
   doc.setTextColor(...C_INK);
 
   const fromLines = [settings.user_name || "Your Name", settings.user_email || ""].filter(Boolean);
-  const toLines   = [settings.employer_name || "Client"].filter(Boolean);
+  const toLines = [billedToName || settings.employer_name || "Client"].filter(Boolean);
   fromLines.forEach((line, i) => {
     if (i === 0) {
       doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(...C_INK);
@@ -194,7 +204,7 @@ function drawTotals(
   startY: number,
   invoice: InvoicePdfData,
   currency: string,
-  rate: number
+  rateLabel: string
 ): number {
   const pageWidth = doc.internal.pageSize.getWidth();
   const rightX  = pageWidth - MARGIN;
@@ -211,7 +221,7 @@ function drawTotals(
 
   // Row 2: Rate
   doc.text("Rate", labelX, y);
-  doc.text(`${formatCurrency(rate, currency)} / hr`, rightX, y, { align: "right" });
+  doc.text(rateLabel, rightX, y, { align: "right" });
   y += 5.5;
 
   // Thin divider
@@ -283,19 +293,21 @@ function renderDetailed(
   entries: TimeEntry[],
   settings: Settings,
   currency: string,
-  rate: number
+  defaultRate: number,
+  rateLabel: string,
+  billedToName?: string | null
 ): void {
-  const y = drawSharedHeader(doc, invoice, settings);
+  const y = drawSharedHeader(doc, invoice, settings, billedToName);
 
   const rows: string[][] = [];
   for (const e of [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))) {
-    const hours = (e.duration_minutes ?? 0) / 60;
+    const billed = getBilledEntry(e, defaultRate, settings.time_rounding);
     rows.push([
       formatDate(e.date),
       `${formatTime(e.start_time)}–${e.end_time ? formatTime(e.end_time) : "?"}`,
-      e.description || "—",
-      hours.toFixed(2),
-      formatCurrency(hours * rate, currency),
+      e.billable ? (e.description || "—") : `${e.description || "—"} (non-billable)`,
+      billed.billedHours.toFixed(2),
+      formatCurrency(billed.amount, currency),
     ]);
   }
 
@@ -317,7 +329,7 @@ function renderDetailed(
   });
 
   const finalY = (doc as any).lastAutoTable.finalY + 8;
-  const afterTotals = drawTotals(doc, finalY, invoice, currency, rate);
+  const afterTotals = drawTotals(doc, finalY, invoice, currency, rateLabel);
   drawNotes(doc, afterTotals + 8, settings);
 }
 
@@ -327,9 +339,11 @@ function renderWeekly(
   entries: TimeEntry[],
   settings: Settings,
   currency: string,
-  rate: number
+  defaultRate: number,
+  rateLabel: string,
+  billedToName?: string | null
 ): void {
-  const y = drawSharedHeader(doc, invoice, settings);
+  const y = drawSharedHeader(doc, invoice, settings, billedToName);
 
   let weekDescriptions: Record<string, string> = {};
   if (invoice.layout_data) {
@@ -341,13 +355,13 @@ function renderWeekly(
   // weekMap: isoWeek → dayOfWeek (0=Mon … 6=Sun) → total hours
   const weekMap = new Map<string, Map<number, number>>();
   for (const e of entries) {
+    const billed = getBilledEntry(e, defaultRate, settings.time_rounding);
     const isoWeek = getISOWeekStr(e.date);
     const date = new Date(e.date + "T00:00:00");
     const dow = date.getDay() === 0 ? 6 : date.getDay() - 1; // Mon=0, Sun=6
-    const hours = (e.duration_minutes ?? 0) / 60;
     if (!weekMap.has(isoWeek)) weekMap.set(isoWeek, new Map());
     const dm = weekMap.get(isoWeek)!;
-    dm.set(dow, (dm.get(dow) ?? 0) + hours);
+    dm.set(dow, (dm.get(dow) ?? 0) + billed.billedHours);
   }
 
   const sortedWeeks = Array.from(weekMap.keys()).sort();
@@ -411,7 +425,7 @@ function renderWeekly(
   });
 
   const finalY = (doc as any).lastAutoTable.finalY + 8;
-  const afterTotals = drawTotals(doc, finalY, invoice, currency, rate);
+  const afterTotals = drawTotals(doc, finalY, invoice, currency, rateLabel);
   drawNotes(doc, afterTotals + 8, settings);
 }
 
@@ -421,9 +435,11 @@ function renderDaily(
   entries: TimeEntry[],
   settings: Settings,
   currency: string,
-  rate: number
+  defaultRate: number,
+  rateLabel: string,
+  billedToName?: string | null
 ): void {
-  const y = drawSharedHeader(doc, invoice, settings);
+  const y = drawSharedHeader(doc, invoice, settings, billedToName);
 
   const byDate = new Map<string, TimeEntry[]>();
   for (const e of entries) {
@@ -433,10 +449,14 @@ function renderDaily(
 
   const rows: string[][] = [];
   for (const [date, dayEntries] of Array.from(byDate.entries()).sort()) {
-    const hours = dayEntries.reduce((s, e) => s + (e.duration_minutes ?? 0) / 60, 0);
+    const billedEntries = dayEntries.map((entry) =>
+      getBilledEntry(entry, defaultRate, settings.time_rounding)
+    );
+    const hours = billedEntries.reduce((sum, entry) => sum + entry.billedHours, 0);
+    const amount = billedEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const descs = [...new Set(dayEntries.map((e) => e.description).filter(Boolean))];
     const desc = descs.length === 1 ? descs[0] : descs.join(" / ") || "—";
-    rows.push([formatDate(date), hours.toFixed(2), desc, formatCurrency(hours * rate, currency)]);
+    rows.push([formatDate(date), hours.toFixed(2), desc, formatCurrency(amount, currency)]);
   }
 
   autoTable(doc, {
@@ -456,20 +476,23 @@ function renderDaily(
   });
 
   const finalY = (doc as any).lastAutoTable.finalY + 8;
-  const afterTotals = drawTotals(doc, finalY, invoice, currency, rate);
+  const afterTotals = drawTotals(doc, finalY, invoice, currency, rateLabel);
   drawNotes(doc, afterTotals + 8, settings);
 }
 
 function renderSimple(
   doc: jsPDF,
   invoice: InvoicePdfData,
-  _entries: TimeEntry[],
+  entries: TimeEntry[],
   settings: Settings,
   currency: string,
-  rate: number
+  defaultRate: number,
+  rateLabel: string,
+  billedToName?: string | null
 ): void {
   const pageWidth = doc.internal.pageSize.getWidth();
-  let y = drawSharedHeader(doc, invoice, settings);
+  let y = drawSharedHeader(doc, invoice, settings, billedToName);
+  const summary = summarizeInvoiceEntries(entries, defaultRate, settings.time_rounding);
 
   // Single services-rendered block
   doc.setFontSize(10);
@@ -486,7 +509,9 @@ function renderSimple(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...C_MID);
   doc.text(
-    `${invoice.total_hours.toFixed(2)}h @ ${formatCurrency(rate, currency)}/hr`,
+    summary.hasMixedRates
+      ? `${invoice.total_hours.toFixed(2)} billed hours`
+      : `${invoice.total_hours.toFixed(2)}h @ ${rateLabel}`,
     pageWidth - MARGIN, y, { align: "right" }
   );
   y += 14;
@@ -495,7 +520,7 @@ function renderSimple(
   doc.line(MARGIN, y, pageWidth - MARGIN, y);
   y += 8;
 
-  const afterTotals = drawTotals(doc, y, invoice, currency, rate);
+  const afterTotals = drawTotals(doc, y, invoice, currency, rateLabel);
   drawNotes(doc, afterTotals + 8, settings);
 }
 
@@ -505,9 +530,11 @@ function renderTypeBreakdown(
   entries: TimeEntry[],
   settings: Settings,
   currency: string,
-  rate: number
+  defaultRate: number,
+  rateLabel: string,
+  billedToName?: string | null
 ): void {
-  const y = drawSharedHeader(doc, invoice, settings);
+  const y = drawSharedHeader(doc, invoice, settings, billedToName);
 
   // Group by entry_type
   const grouped = new Map<string, TimeEntry[]>();
@@ -521,8 +548,11 @@ function renderTypeBreakdown(
   const typeRows: TypeRow[] = [];
 
   for (const [type, typeEntries] of Array.from(grouped.entries()).sort()) {
-    const subHours = typeEntries.reduce((s, e) => s + (e.duration_minutes ?? 0) / 60, 0);
-    const subAmount = subHours * rate;
+    const billedEntries = typeEntries.map((entry) =>
+      getBilledEntry(entry, defaultRate, settings.time_rounding)
+    );
+    const subHours = billedEntries.reduce((sum, entry) => sum + entry.billedHours, 0);
+    const subAmount = billedEntries.reduce((sum, entry) => sum + entry.amount, 0);
     // Section header row
     typeRows.push({
       cells: [type.charAt(0).toUpperCase() + type.slice(1), "", subHours.toFixed(2), formatCurrency(subAmount, currency)],
@@ -530,9 +560,14 @@ function renderTypeBreakdown(
     });
     // Entry rows (description indented with leading spaces)
     for (const e of typeEntries) {
-      const hours = (e.duration_minutes ?? 0) / 60;
+      const billed = getBilledEntry(e, defaultRate, settings.time_rounding);
       typeRows.push({
-        cells: ["", "  " + (e.description || "—"), hours.toFixed(2), formatCurrency(hours * rate, currency)],
+        cells: [
+          "",
+          "  " + (e.billable ? (e.description || "—") : `${e.description || "—"} (non-billable)`),
+          billed.billedHours.toFixed(2),
+          formatCurrency(billed.amount, currency),
+        ],
         isHeader: false,
       });
     }
@@ -564,35 +599,41 @@ function renderTypeBreakdown(
   });
 
   const finalY = (doc as any).lastAutoTable.finalY + 8;
-  const afterTotals = drawTotals(doc, finalY, invoice, currency, rate);
+  const afterTotals = drawTotals(doc, finalY, invoice, currency, rateLabel);
   drawNotes(doc, afterTotals + 8, settings);
 }
 
 function buildInvoicePDF(
   invoice: Invoice | InvoicePreview,
   entries: TimeEntry[],
-  settings: Settings
+  settings: Settings,
+  options: InvoicePdfOptions = {}
 ): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "letter" });
   const invoiceData = toInvoicePdfData(invoice);
   const currency = settings.currency || "USD";
   const rate = invoiceData.hourly_rate || parseFloat(settings.hourly_rate) || 75;
+  const rateLabel = getInvoiceRateLabel(
+    summarizeInvoiceEntries(entries, rate, settings.time_rounding),
+    rate,
+    currency
+  );
 
   switch (invoiceData.format || "detailed") {
     case "weekly":
-      renderWeekly(doc, invoiceData, entries, settings, currency, rate);
+      renderWeekly(doc, invoiceData, entries, settings, currency, rate, rateLabel, options.billedToName);
       break;
     case "daily":
-      renderDaily(doc, invoiceData, entries, settings, currency, rate);
+      renderDaily(doc, invoiceData, entries, settings, currency, rate, rateLabel, options.billedToName);
       break;
     case "simple":
-      renderSimple(doc, invoiceData, entries, settings, currency, rate);
+      renderSimple(doc, invoiceData, entries, settings, currency, rate, rateLabel, options.billedToName);
       break;
     case "type-breakdown":
-      renderTypeBreakdown(doc, invoiceData, entries, settings, currency, rate);
+      renderTypeBreakdown(doc, invoiceData, entries, settings, currency, rate, rateLabel, options.billedToName);
       break;
     default:
-      renderDetailed(doc, invoiceData, entries, settings, currency, rate);
+      renderDetailed(doc, invoiceData, entries, settings, currency, rate, rateLabel, options.billedToName);
   }
 
   return doc;
@@ -601,27 +642,40 @@ function buildInvoicePDF(
 export function getInvoicePdfBlob(
   invoice: Invoice | InvoicePreview,
   entries: TimeEntry[],
-  settings: Settings
+  settings: Settings,
+  options: InvoicePdfOptions = {}
 ): Blob {
-  const doc = buildInvoicePDF(invoice, entries, settings);
+  const doc = buildInvoicePDF(invoice, entries, settings, options);
   return new Blob([doc.output("arraybuffer") as ArrayBuffer], {
     type: "application/pdf",
   });
 }
 
+export function getInvoicePdfBytes(
+  invoice: Invoice | InvoicePreview,
+  entries: TimeEntry[],
+  settings: Settings,
+  options: InvoicePdfOptions = {}
+): Uint8Array {
+  const doc = buildInvoicePDF(invoice, entries, settings, options);
+  return new Uint8Array(doc.output("arraybuffer") as ArrayBuffer);
+}
+
 export function getInvoicePdfBlobUrl(
   invoice: Invoice | InvoicePreview,
   entries: TimeEntry[],
-  settings: Settings
+  settings: Settings,
+  options: InvoicePdfOptions = {}
 ): string {
-  return URL.createObjectURL(getInvoicePdfBlob(invoice, entries, settings));
+  return URL.createObjectURL(getInvoicePdfBlob(invoice, entries, settings, options));
 }
 
 export function downloadInvoicePDF(
   invoice: Invoice | InvoicePreview,
   entries: TimeEntry[],
-  settings: Settings
+  settings: Settings,
+  options: InvoicePdfOptions = {}
 ): void {
-  const doc = buildInvoicePDF(invoice, entries, settings);
+  const doc = buildInvoicePDF(invoice, entries, settings, options);
   doc.save(invoiceFilename(invoice));
 }

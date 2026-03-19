@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS invoice_entry_snapshots (
     tag_id TEXT,
     tag_name TEXT NOT NULL,
     tag_color TEXT NOT NULL,
+    billable INTEGER NOT NULL DEFAULT 1,
+    billed_minutes INTEGER,
     hourly_rate REAL NOT NULL,
     amount REAL NOT NULL,
     created_at TEXT NOT NULL
@@ -77,6 +79,8 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
     ('user_name', ''),
     ('user_email', ''),
     ('employer_name', ''),
+    ('backup_directory', ''),
+    ('auto_backup_enabled', '1'),
     ('backup_csv_path', ''),
     ('theme', 'dark'),
     ('invoice_notes', 'Payment due within 30 days. Thank you for your business.');

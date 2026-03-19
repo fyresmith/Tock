@@ -6,10 +6,11 @@ import { LogFilters } from "./LogFilters";
 import { EntryRow } from "./EntryRow";
 import { EntryForm } from "./EntryForm";
 import { MonthView } from "./MonthView";
-import { ListEntriesArgs } from "../../lib/commands";
+import { ListEntriesArgs, bulkDeleteEntries, bulkUpdateTag } from "../../lib/commands";
 import { minutesToHHMM, currentMonthRange } from "../../lib/dateUtils";
 import { Plus, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { getSelectableTags } from "../tags/TagSelect";
 
 type ViewMode = "list" | "month";
 
@@ -25,6 +26,8 @@ export function TimeLogView() {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState<string>(() => format(new Date(), "yyyy-MM-dd"));
   const [showForm, setShowForm] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagId, setBulkTagId] = useState("");
 
   // Load entries whenever filters or calendar month changes
   useEffect(() => {
@@ -56,6 +59,47 @@ export function TimeLogView() {
   };
 
   const totalMinutes = entries.reduce((sum, e) => sum + (e.duration_minutes ?? 0), 0);
+  const selectableTags = getSelectableTags(tags);
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === entries.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(entries.map((e) => e.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} entr${selectedIds.size === 1 ? "y" : "ies"}?`)) return;
+    try {
+      await bulkDeleteEntries([...selectedIds]);
+      setSelectedIds(new Set());
+      load(filters);
+    } catch (e) {
+      alert(String(e));
+    }
+  };
+
+  const handleBulkRetag = async () => {
+    if (!bulkTagId) return;
+    try {
+      await bulkUpdateTag([...selectedIds], bulkTagId);
+      setSelectedIds(new Set());
+      setBulkTagId("");
+      load(filters);
+    } catch (e) {
+      alert(String(e));
+    }
+  };
 
   const dateRange =
     filters.date_from && filters.date_to
@@ -170,9 +214,53 @@ export function TimeLogView() {
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] text-xs sticky top-0 z-20">
+              <span className="text-[var(--text-secondary)] font-medium">{selectedIds.size} selected</span>
+              <button
+                onClick={handleBulkDelete}
+                className="px-2.5 py-1 rounded text-xs bg-[var(--danger)]/15 text-[var(--danger)] hover:bg-[var(--danger)]/25 transition-colors"
+              >
+                Delete
+              </button>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={bulkTagId}
+                  onChange={(e) => setBulkTagId(e.target.value)}
+                  className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+                >
+                  <option value="">Pick tag…</option>
+                  {selectableTags.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleBulkRetag}
+                  disabled={!bulkTagId}
+                  className="px-2.5 py-1 rounded text-xs bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
+                >
+                  Re-tag
+                </button>
+              </div>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="ml-auto px-2.5 py-1 rounded text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <table className="w-full">
-            <thead className="sticky top-0 bg-[var(--surface-0)] z-10 border-b border-[var(--border)]">
+            <thead className="sticky top-0 bg-[var(--surface-0)] z-10 border-b border-[var(--border)] shadow-[0_2px_6px_rgba(0,0,0,0.2)]">
               <tr>
+                <th className="px-4 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === entries.length && entries.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded"
+                  />
+                </th>
                 {["Date", "Time", "Description", "Type", "Client", "Duration", ""].map((col) => (
                   <th
                     key={col}
@@ -192,6 +280,8 @@ export function TimeLogView() {
                   clients={clients}
                   onUpdate={async (args) => { await update(args); }}
                   onDelete={remove}
+                  selected={selectedIds.has(entry.id)}
+                  onToggle={toggleSelect}
                 />
               ))}
             </tbody>

@@ -4657,10 +4657,12 @@ name = "tock"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "crc32fast",
  "csv",
  "dirs 5.0.1",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "tauri",
  "tauri-build",
@@ -4668,6 +4670,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tokio",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useInvoices } from "../../hooks/useInvoices";
 import { useClients } from "../../hooks/useClients";
+import { getBilledEntry, getBillingContact, getInvoiceRateLabel, summarizeInvoiceEntries } from "../../lib/billing";
 import {
   InvoiceFormat,
   InvoicePreview,
@@ -129,6 +130,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
     format === "weekly" && periodStart && periodEnd
       ? getCalendarWeeks(periodStart, periodEnd)
       : [];
+  const selectedClient = activeClients.find((client) => client.id === selectedClientId) ?? null;
 
   const layoutData =
     format === "weekly"
@@ -140,15 +142,20 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
     [previewEntries, selectedIds]
   );
   const selectedCount = selectedEntries.length;
-  const totalMinutes = selectedEntries.reduce(
-    (sum, entry) => sum + (entry.duration_minutes ?? 0),
-    0
-  );
-  const totalHours = totalMinutes / 60;
   const hourlyRate = previewData?.hourly_rate ?? 0;
-  const totalAmount = Math.round(totalHours * hourlyRate * 100) / 100;
   const currency = settings.currency || "USD";
   const allSelected = previewEntries.length > 0 && selectedCount === previewEntries.length;
+  const billingSummary = useMemo(
+    () => summarizeInvoiceEntries(selectedEntries, hourlyRate, settings.time_rounding),
+    [hourlyRate, selectedEntries, settings.time_rounding]
+  );
+  const totalHours = billingSummary.totalHours;
+  const totalAmount = billingSummary.totalAmount;
+  const rateLabel = getInvoiceRateLabel(billingSummary, hourlyRate, currency);
+  const billedToName = getBillingContact(
+    selectedClient,
+    previewData?.client_name ?? settings.employer_name
+  ).name;
 
   const previewDocument = useMemo(() => {
     if (!previewData) return null;
@@ -166,8 +173,8 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
       return null;
     }
 
-    return getInvoicePdfBlob(previewDocument, selectedEntries, settings);
-  }, [previewDocument, selectedEntries, settings, step]);
+    return getInvoicePdfBlob(previewDocument, selectedEntries, settings, { billedToName });
+  }, [billedToName, previewDocument, selectedEntries, settings, step]);
 
   const loadSelectionStep = async () => {
     setLoading(true);
@@ -462,13 +469,17 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                           Description
                         </th>
                         <th className="px-4 py-3 text-right text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                          Hours
+                          Billed Hours
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                          Amount
                         </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border)]">
                       {previewEntries.map((entry) => {
                         const selected = selectedIds.has(entry.id);
+                        const billed = getBilledEntry(entry, hourlyRate, settings.time_rounding);
                         return (
                           <tr
                             key={entry.id}
@@ -486,10 +497,20 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                               {formatDate(entry.date)}
                             </td>
                             <td className="px-4 py-3 text-sm text-[var(--text-primary)]">
-                              {entry.description || "—"}
+                              <div>{entry.description || "—"}</div>
+                              {(!entry.billable || entry.hourly_rate != null) && (
+                                <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+                                  {!entry.billable ? "Non-billable" : null}
+                                  {!entry.billable && entry.hourly_rate != null ? " · " : null}
+                                  {entry.hourly_rate != null ? `${formatCurrency(entry.hourly_rate, currency)}/hr override` : null}
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right text-sm font-mono tabular-nums text-[var(--text-primary)]">
-                              {((entry.duration_minutes ?? 0) / 60).toFixed(2)}h
+                              {billed.billedHours.toFixed(2)}h
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm font-mono tabular-nums text-[var(--text-primary)]">
+                              {formatCurrency(billed.amount, currency)}
                             </td>
                           </tr>
                         );
@@ -508,12 +529,12 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                       <span className="tabular-nums text-[var(--text-primary)]">{selectedCount}</span>
                     </div>
                     <div className="flex justify-between text-[var(--text-secondary)]">
-                      <span>Total hours</span>
+                      <span>Billed hours</span>
                       <span className="tabular-nums text-[var(--text-primary)]">{totalHours.toFixed(2)}h</span>
                     </div>
                     <div className="flex justify-between text-[var(--text-secondary)]">
                       <span>Rate</span>
-                      <span className="text-[var(--text-primary)]">{formatCurrency(hourlyRate, currency)}/hr</span>
+                      <span className="text-[var(--text-primary)]">{rateLabel}</span>
                     </div>
                     <div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--text-primary)]">
                       <span>Total</span>
@@ -588,12 +609,12 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                       <span className="tabular-nums text-[var(--text-primary)]">{selectedCount}</span>
                     </div>
                     <div className="flex justify-between text-[var(--text-secondary)]">
-                      <span>Total hours</span>
+                      <span>Billed hours</span>
                       <span className="tabular-nums text-[var(--text-primary)]">{totalHours.toFixed(2)}h</span>
                     </div>
                     <div className="flex justify-between text-[var(--text-secondary)]">
                       <span>Rate</span>
-                      <span className="text-[var(--text-primary)]">{formatCurrency(hourlyRate, currency)}/hr</span>
+                      <span className="text-[var(--text-primary)]">{rateLabel}</span>
                     </div>
                     <div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--text-primary)]">
                       <span>Total due</span>

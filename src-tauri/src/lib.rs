@@ -9,11 +9,11 @@ use commands::{
         archive_client, create_client, list_clients, set_default_client, unarchive_client,
         update_client,
     },
-    entries::{create_entry, delete_entry, list_entries, update_entry},
+    entries::{bulk_delete_entries, bulk_update_tag, create_entry, delete_entry, list_entries, update_entry},
     invoices::{
-        create_invoice, delete_invoice, get_invoice_entries, issue_invoice, list_invoices,
-        mark_invoice_paid, preview_invoice, regenerate_invoice, revert_invoice_to_draft,
-        send_invoice,
+        cancel_invoice, create_invoice, delete_invoice, get_invoice_entries, issue_invoice,
+        list_invoices, mark_invoice_paid, preview_invoice, regenerate_invoice,
+        revert_invoice_to_draft, save_invoice_pdf, send_invoice,
     },
     settings::{get_dashboard_data, get_settings, update_setting},
     tags::{archive_tag, create_tag, list_tags, unarchive_tag, update_tag},
@@ -28,6 +28,8 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
+                backup::apply_pending_restore(&app_handle)
+                    .expect("Failed to apply pending restore");
                 let pool = db::init_db(&app_handle)
                     .await
                     .expect("Failed to initialize database");
@@ -47,6 +49,8 @@ pub fn run() {
             update_entry,
             delete_entry,
             list_entries,
+            bulk_delete_entries,
+            bulk_update_tag,
             // Invoices
             preview_invoice,
             create_invoice,
@@ -56,6 +60,8 @@ pub fn run() {
             delete_invoice,
             issue_invoice,
             revert_invoice_to_draft,
+            cancel_invoice,
+            save_invoice_pdf,
             send_invoice,
             mark_invoice_paid,
             // Settings & dashboard
@@ -76,6 +82,11 @@ pub fn run() {
             archive_client,
             unarchive_client,
             // Backup
+            backup::create_backup,
+            backup::list_backups,
+            backup::inspect_backup,
+            backup::stage_restore,
+            backup::restart_app,
             backup::export_csv,
         ])
         .run(tauri::generate_context!())

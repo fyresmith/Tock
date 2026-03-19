@@ -3,15 +3,20 @@ use std::fs;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
+pub fn app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+pub fn db_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    Ok(app_data_dir(app)?.join("tock.db"))
+}
+
 pub async fn init_db(app: &AppHandle) -> Result<SqlitePool, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let data_dir = app_data_dir(app)?;
 
     fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
 
-    let db_path = data_dir.join("tock.db");
+    let db_path = db_path(app)?;
     let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
 
     let pool = SqlitePoolOptions::new()
@@ -51,6 +56,8 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
             hourly_rate REAL NOT NULL DEFAULT 0,
+            billing_name TEXT,
+            billing_email TEXT,
             is_default INTEGER NOT NULL DEFAULT 0,
             is_archived INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
@@ -62,6 +69,8 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
 
     for stmt in [
+        "ALTER TABLE clients ADD COLUMN billing_name TEXT",
+        "ALTER TABLE clients ADD COLUMN billing_email TEXT",
         "ALTER TABLE time_entries ADD COLUMN client_id TEXT",
         "ALTER TABLE invoices ADD COLUMN client_id TEXT",
         "ALTER TABLE invoices ADD COLUMN client_name TEXT",
@@ -108,6 +117,8 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
             tag_id TEXT,
             tag_name TEXT NOT NULL,
             tag_color TEXT NOT NULL,
+            billable INTEGER NOT NULL DEFAULT 1,
+            billed_minutes INTEGER,
             hourly_rate REAL NOT NULL,
             amount REAL NOT NULL,
             created_at TEXT NOT NULL
@@ -116,6 +127,19 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
     .execute(pool)
     .await
     .map_err(|e| e.to_string())?;
+
+    // 005: billable flag, per-entry rate, and time rounding setting
+    for stmt in [
+        "ALTER TABLE time_entries ADD COLUMN billable INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE time_entries ADD COLUMN hourly_rate REAL",
+        "ALTER TABLE invoice_entry_snapshots ADD COLUMN billable INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE invoice_entry_snapshots ADD COLUMN billed_minutes INTEGER",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('backup_directory', '')",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_backup_enabled', '1')",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('time_rounding', 'none')",
+    ] {
+        let _ = sqlx::query(stmt).execute(pool).await;
+    }
 
     seed_default_tags(pool).await?;
     backfill_entry_tags(pool).await?;

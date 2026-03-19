@@ -2,13 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { addDays, format } from "date-fns";
 import { useInvoices } from "../../hooks/useInvoices";
 import { useSettings } from "../../hooks/useSettings";
-import { Invoice, InvoiceWithEntries, TimeEntry } from "../../lib/commands";
-import { downloadInvoicePDF } from "./InvoicePDF";
+import { useClients } from "../../hooks/useClients";
+import { Client, Invoice, InvoiceWithEntries, TimeEntry } from "../../lib/commands";
+import { getBillingContact, getInvoiceRateLabel, summarizeInvoiceEntries } from "../../lib/billing";
+import { buildGmailComposeUrl, buildInvoiceEmailBody, buildInvoiceEmailSubject } from "../../lib/invoiceEmail";
+import { downloadInvoicePDF, getInvoicePdfBytes, invoiceFilename } from "./InvoicePDF";
 import { GenerateFlow } from "./GenerateFlow";
 import { TagBadge } from "../tags/TagBadge";
 import { formatCurrency, formatDate } from "../../lib/dateUtils";
+import { save } from "@tauri-apps/plugin-dialog";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   ArrowLeftCircle,
+  Ban,
   CheckCircle,
   Download,
   ExternalLink,
@@ -46,23 +52,35 @@ function InvoiceDetailModal({
   entries,
   entriesLoading,
   currency,
+  rateLabel,
+  billedToName,
+  billingEmail,
   onClose,
   onDownload,
+  onRevealPdf,
+  onOpenGmail,
   onIssue,
   onRevert,
   onSend,
   onMarkPaid,
   onDelete,
+  onCancel,
   working,
 }: {
   invoice: Invoice;
   entries: TimeEntry[];
   entriesLoading: boolean;
   currency: string;
+  rateLabel: string;
+  billedToName: string;
+  billingEmail: string | null;
   onClose: () => void;
   onDownload: () => Promise<void>;
+  onRevealPdf: (() => Promise<void>) | null;
+  onOpenGmail: () => Promise<void>;
   onIssue: (dueAt: string) => Promise<void>;
   onRevert: () => Promise<void>;
+  onCancel: () => Promise<void>;
   onSend: () => Promise<void>;
   onMarkPaid: (paidAt: string) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -149,7 +167,7 @@ function InvoiceDetailModal({
                 </div>
                 <div className="flex justify-between text-[var(--text-secondary)]">
                   <span>Rate</span>
-                  <span className="text-[var(--text-primary)]">{formatCurrency(invoice.hourly_rate, currency)}/hr</span>
+                  <span className="text-[var(--text-primary)]">{rateLabel}</span>
                 </div>
                 <div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--text-primary)]">
                   <span>Total</span>
@@ -167,6 +185,16 @@ function InvoiceDetailModal({
                 <Download size={15} />
                 Download PDF
               </button>
+              {onRevealPdf && (
+                <button
+                  onClick={onRevealPdf}
+                  disabled={working !== null}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+                >
+                  <ExternalLink size={15} />
+                  Reveal Saved PDF
+                </button>
+              )}
 
               {invoice.status === "draft" && (
                 <>
@@ -190,11 +218,27 @@ function InvoiceDetailModal({
               {invoice.status === "issued" && (
                 <>
                   <button
-                    onClick={onSend}
-                    disabled={working !== null}
+                    onClick={onOpenGmail}
+                    disabled={working !== null || !billingEmail}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50"
                   >
                     <Mail size={15} />
+                    Prep Gmail Draft
+                  </button>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Saves the PDF, opens a Gmail draft, and reveals the file so you can attach it manually.
+                  </p>
+                  {!billingEmail && (
+                    <p className="text-xs text-[var(--warning)]">
+                      Add a billing email for {billedToName} in Settings to use Gmail helper.
+                    </p>
+                  )}
+                  <button
+                    onClick={onSend}
+                    disabled={working !== null}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle size={15} />
                     Mark Sent
                   </button>
                   <button
@@ -227,11 +271,22 @@ function InvoiceDetailModal({
                 </>
               )}
 
+              {invoice.status !== "draft" && (
+                <button
+                  onClick={onCancel}
+                  disabled={working !== null}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--danger)]/15 hover:bg-[var(--danger)]/25 text-sm text-[var(--danger)] font-medium transition-colors disabled:opacity-50"
+                >
+                  <Ban size={15} />
+                  Cancel Invoice
+                </button>
+              )}
+
               {!invoice.is_locked && (
                 <button
                   onClick={onDelete}
                   disabled={working !== null}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--danger)]/15 hover:bg-[var(--danger)]/25 text-sm text-[var(--danger)] font-medium transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-muted)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
                 >
                   <Trash2 size={15} />
                   Delete Invoice
@@ -308,12 +363,15 @@ export function InvoicesView() {
     load,
     issue,
     revertToDraft,
+    cancel,
     send,
     markPaid,
     fetchEntries,
+    savePdf,
     deleteInvoice,
   } = useInvoices();
   const { settings } = useSettings();
+  const { clients } = useClients();
   const [showGenerate, setShowGenerate] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [detailEntries, setDetailEntries] = useState<TimeEntry[]>([]);
@@ -325,6 +383,33 @@ export function InvoicesView() {
   }, [load]);
 
   const currency = settings?.currency ?? "USD";
+  const selectedInvoiceFresh = useMemo(
+    () => invoices.find((invoice) => invoice.id === selectedInvoice?.id) ?? selectedInvoice,
+    [invoices, selectedInvoice]
+  );
+  const selectedInvoiceClient = useMemo(
+    () =>
+      selectedInvoiceFresh?.client_id
+        ? clients.find((client) => client.id === selectedInvoiceFresh.client_id) ?? null
+        : null,
+    [clients, selectedInvoiceFresh]
+  );
+  const selectedInvoiceContact = useMemo(
+    () =>
+      getBillingContact(
+        selectedInvoiceClient,
+        selectedInvoiceFresh?.client_name ?? settings?.employer_name ?? ""
+      ),
+    [selectedInvoiceClient, selectedInvoiceFresh?.client_name, settings?.employer_name]
+  );
+  const selectedInvoiceRateLabel = useMemo(() => {
+    if (!selectedInvoiceFresh || !settings) return "—";
+    return getInvoiceRateLabel(
+      summarizeInvoiceEntries(detailEntries, selectedInvoiceFresh.hourly_rate, settings.time_rounding),
+      selectedInvoiceFresh.hourly_rate,
+      currency
+    );
+  }, [currency, detailEntries, selectedInvoiceFresh, settings]);
 
   const openInvoice = async (invoice: Invoice) => {
     setSelectedInvoice(invoice);
@@ -335,11 +420,6 @@ export function InvoicesView() {
       setEntriesLoading(false);
     }
   };
-
-  const selectedInvoiceFresh = useMemo(
-    () => invoices.find((invoice) => invoice.id === selectedInvoice?.id) ?? selectedInvoice,
-    [invoices, selectedInvoice]
-  );
 
   const refreshSelectedEntries = async (invoiceId: string) => {
     setEntriesLoading(true);
@@ -359,11 +439,71 @@ export function InvoicesView() {
     }
   };
 
+  const getInvoiceClient = (invoice: Invoice): Client | null =>
+    invoice.client_id ? clients.find((client) => client.id === invoice.client_id) ?? null : null;
+
+  const getInvoiceRecipientName = (invoice: Invoice): string =>
+    getBillingContact(getInvoiceClient(invoice), invoice.client_name ?? settings?.employer_name ?? "").name;
+
   const handleDownload = async (invoice: Invoice) => {
     if (!settings) return;
     await withWorking(`download-${invoice.id}`, async () => {
       const entries = invoice.id === selectedInvoice?.id ? detailEntries : await fetchEntries(invoice.id);
-      downloadInvoicePDF(invoice, entries, settings);
+      downloadInvoicePDF(invoice, entries, settings, {
+        billedToName: getInvoiceRecipientName(invoice),
+      });
+    });
+  };
+
+  const handleOpenGmail = async (invoice: Invoice) => {
+    if (!settings || invoice.status !== "issued") return;
+
+    const client = getInvoiceClient(invoice);
+    const billingContact = getBillingContact(client, invoice.client_name ?? settings.employer_name);
+    const billingEmail = billingContact.email;
+    if (!billingEmail) {
+      return;
+    }
+
+    await withWorking(`gmail-${invoice.id}`, async () => {
+      const entries = invoice.id === selectedInvoice?.id ? detailEntries : await fetchEntries(invoice.id);
+      const defaultPath = invoice.pdf_path || invoiceFilename(invoice);
+      const path = await save({
+        title: "Save invoice PDF",
+        defaultPath,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+
+      if (!path) {
+        return;
+      }
+
+      const bytes = Array.from(
+        getInvoicePdfBytes(invoice, entries, settings, { billedToName: billingContact.name })
+      );
+      await savePdf(invoice.id, path, bytes);
+      await revealItemInDir(path);
+
+      const gmailUrl = buildGmailComposeUrl({
+        to: billingEmail,
+        subject: buildInvoiceEmailSubject(invoice),
+        body: buildInvoiceEmailBody({
+          invoice,
+          recipientName: billingContact.name,
+          senderName: settings.user_name || "Your contractor",
+          currency,
+        }),
+      });
+
+      await openUrl(gmailUrl);
+    });
+  };
+
+  const handleRevealPdf = async (invoice: Invoice) => {
+    if (!invoice.pdf_path) return;
+
+    await withWorking(`reveal-${invoice.id}`, async () => {
+      await revealItemInDir(invoice.pdf_path!);
     });
   };
 
@@ -479,8 +619,13 @@ export function InvoicesView() {
           entries={detailEntries}
           entriesLoading={entriesLoading}
           currency={currency}
+          rateLabel={selectedInvoiceRateLabel}
+          billedToName={selectedInvoiceContact.name}
+          billingEmail={selectedInvoiceContact.email}
           onClose={() => setSelectedInvoice(null)}
           onDownload={() => handleDownload(selectedInvoiceFresh)}
+          onRevealPdf={selectedInvoiceFresh.pdf_path ? () => handleRevealPdf(selectedInvoiceFresh) : null}
+          onOpenGmail={() => handleOpenGmail(selectedInvoiceFresh)}
           onIssue={(dueAt) =>
             runLifecycleAction(selectedInvoiceFresh.id, async () => {
               await issue(selectedInvoiceFresh.id, todayDate(), dueAt);
@@ -489,6 +634,11 @@ export function InvoicesView() {
           onRevert={() =>
             runLifecycleAction(selectedInvoiceFresh.id, async () => {
               await revertToDraft(selectedInvoiceFresh.id);
+            })
+          }
+          onCancel={() =>
+            runLifecycleAction(selectedInvoiceFresh.id, async () => {
+              await cancel(selectedInvoiceFresh.id);
             })
           }
           onSend={() =>

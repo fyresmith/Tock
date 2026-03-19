@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::backup;
+
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct EntryTag {
     pub id: String,
@@ -129,6 +131,7 @@ pub async fn list_tags(pool: tauri::State<'_, SqlitePool>) -> Result<Vec<EntryTa
 #[tauri::command]
 pub async fn create_tag(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     args: CreateTagArgs,
 ) -> Result<EntryTag, String> {
     let name = normalize_name(&args.name)?;
@@ -159,7 +162,7 @@ pub async fn create_tag(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(EntryTag {
+    let tag = EntryTag {
         id,
         name,
         color,
@@ -167,12 +170,16 @@ pub async fn create_tag(
         is_archived: false,
         created_at: now.clone(),
         updated_at: now,
-    })
+    };
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "tag-create").await;
+    Ok(tag)
 }
 
 #[tauri::command]
 pub async fn update_tag(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     args: UpdateTagArgs,
 ) -> Result<EntryTag, String> {
     let name = normalize_name(&args.name)?;
@@ -213,7 +220,7 @@ pub async fn update_tag(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
-    Ok(EntryTag {
+    let tag = EntryTag {
         id: args.id,
         name,
         color,
@@ -221,12 +228,16 @@ pub async fn update_tag(
         is_archived: current.is_archived,
         created_at: current.created_at,
         updated_at: now,
-    })
+    };
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "tag-update").await;
+    Ok(tag)
 }
 
 #[tauri::command]
 pub async fn archive_tag(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     id: String,
 ) -> Result<EntryTag, String> {
     let tag = get_tag_by_id(pool.inner(), &id).await?;
@@ -254,16 +265,20 @@ pub async fn archive_tag(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(EntryTag {
+    let archived = EntryTag {
         is_archived: true,
         updated_at: now,
         ..tag
-    })
+    };
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "tag-archive").await;
+    Ok(archived)
 }
 
 #[tauri::command]
 pub async fn unarchive_tag(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     id: String,
 ) -> Result<EntryTag, String> {
     let tag = get_tag_by_id(pool.inner(), &id).await?;
@@ -281,9 +296,12 @@ pub async fn unarchive_tag(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(EntryTag {
+    let tag = EntryTag {
         is_archived: false,
         updated_at: now,
         ..tag
-    })
+    };
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "tag-unarchive").await;
+    Ok(tag)
 }

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useMemo } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TimerView } from "./components/timer/TimerView";
 import { TimeLogView } from "./components/log/TimeLogView";
@@ -9,6 +9,7 @@ import { StopPrompt } from "./components/timer/StopPrompt";
 import { useTimerStore } from "./stores/timerStore";
 import { useSettings } from "./hooks/useSettings";
 import { useTimerSync } from "./hooks/useTimerSync";
+import { startTimer } from "./lib/commands";
 
 type View = "timer" | "log" | "dashboard" | "invoices" | "settings";
 
@@ -17,9 +18,11 @@ const VIEWS: View[] = ["timer", "log", "dashboard", "invoices", "settings"];
 export function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
   const [showStop, setShowStop] = useState(false);
-  const { isRunning } = useTimerStore();
+  const { isRunning, isPaused, setActiveEntry, pause, resume } = useTimerStore();
   const { settings } = useSettings();
   useTimerSync();
+
+  const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
 
   useEffect(() => {
     if (settings?.theme === "light") {
@@ -30,30 +33,40 @@ export function App() {
   }, [settings?.theme]);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (
-        e.code === "Space" &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement) &&
-        !(e.target instanceof HTMLSelectElement)
-      ) {
+    async (e: KeyboardEvent) => {
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+      const inInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement;
+
+      // Space — start / pause / resume (never in inputs)
+      if (e.code === "Space" && !inInput && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        if (isRunning) {
-          setShowStop(true);
+        if (isPaused) {
+          resume();
+        } else if (isRunning) {
+          pause();
         } else {
           setCurrentView("timer");
+          const entry = await startTimer(null);
+          setActiveEntry(entry);
         }
       }
-      if (e.ctrlKey && e.key >= "1" && e.key <= "5") {
+
+      // Cmd/Ctrl+Enter — stop (open stop prompt)
+      if (e.code === "Enter" && modKey && !inInput) {
+        e.preventDefault();
+        if (isRunning || isPaused) setShowStop(true);
+      }
+
+      // Cmd/Ctrl+1-5 — navigate
+      if (modKey && e.key >= "1" && e.key <= "5") {
         e.preventDefault();
         setCurrentView(VIEWS[parseInt(e.key) - 1]);
       }
-      if (e.ctrlKey && e.key === "n") {
-        e.preventDefault();
-        setCurrentView("log");
-      }
     },
-    [isRunning]
+    [isRunning, isPaused, pause, resume, setActiveEntry, isMac]
   );
 
   useEffect(() => {

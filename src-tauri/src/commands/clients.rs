@@ -3,11 +3,15 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::backup;
+
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct Client {
     pub id: String,
     pub name: String,
     pub hourly_rate: f64,
+    pub billing_name: Option<String>,
+    pub billing_email: Option<String>,
     pub is_default: bool,
     pub is_archived: bool,
     pub created_at: String,
@@ -18,6 +22,8 @@ pub struct Client {
 pub struct CreateClientArgs {
     pub name: String,
     pub hourly_rate: f64,
+    pub billing_name: Option<String>,
+    pub billing_email: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +31,8 @@ pub struct UpdateClientArgs {
     pub id: String,
     pub name: String,
     pub hourly_rate: f64,
+    pub billing_name: Option<String>,
+    pub billing_email: Option<String>,
 }
 
 fn now_iso() -> String {
@@ -32,7 +40,18 @@ fn now_iso() -> String {
 }
 
 const CLIENT_SELECT: &str =
-    "SELECT id, name, hourly_rate, is_default, is_archived, created_at, updated_at FROM clients";
+    "SELECT id, name, hourly_rate, billing_name, billing_email, is_default, is_archived, created_at, updated_at FROM clients";
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
 
 pub async fn get_client_by_id(pool: &SqlitePool, id: &str) -> Result<Client, String> {
     sqlx::query_as(&format!("{} WHERE id = ?", CLIENT_SELECT))
@@ -90,10 +109,13 @@ pub async fn list_clients(pool: tauri::State<'_, SqlitePool>) -> Result<Vec<Clie
 #[tauri::command]
 pub async fn create_client(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     args: CreateClientArgs,
 ) -> Result<Client, String> {
     let id = Uuid::new_v4().to_string();
     let now = now_iso();
+    let billing_name = normalize_optional_text(args.billing_name);
+    let billing_email = normalize_optional_text(args.billing_email);
 
     // First active client becomes the default automatically.
     let count: (i64,) =
@@ -104,12 +126,14 @@ pub async fn create_client(
     let is_default: i64 = if count.0 == 0 { 1 } else { 0 };
 
     sqlx::query(
-        "INSERT INTO clients (id, name, hourly_rate, is_default, is_archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 0, ?, ?)",
+        "INSERT INTO clients (id, name, hourly_rate, billing_name, billing_email, is_default, is_archived, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)",
     )
     .bind(&id)
     .bind(&args.name)
     .bind(args.hourly_rate)
+    .bind(&billing_name)
+    .bind(&billing_email)
     .bind(is_default)
     .bind(&now)
     .bind(&now)
@@ -117,32 +141,44 @@ pub async fn create_client(
     .await
     .map_err(|e| e.to_string())?;
 
-    get_client_by_id(pool.inner(), &id).await
+    let client = get_client_by_id(pool.inner(), &id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "client-create").await;
+    Ok(client)
 }
 
 #[tauri::command]
 pub async fn update_client(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     args: UpdateClientArgs,
 ) -> Result<Client, String> {
     let now = now_iso();
+    let billing_name = normalize_optional_text(args.billing_name);
+    let billing_email = normalize_optional_text(args.billing_email);
     sqlx::query(
-        "UPDATE clients SET name = ?, hourly_rate = ?, updated_at = ? WHERE id = ?",
+        "UPDATE clients
+         SET name = ?, hourly_rate = ?, billing_name = ?, billing_email = ?, updated_at = ?
+         WHERE id = ?",
     )
     .bind(&args.name)
     .bind(args.hourly_rate)
+    .bind(&billing_name)
+    .bind(&billing_email)
     .bind(&now)
     .bind(&args.id)
     .execute(pool.inner())
     .await
     .map_err(|e| e.to_string())?;
 
-    get_client_by_id(pool.inner(), &args.id).await
+    let client = get_client_by_id(pool.inner(), &args.id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "client-update").await;
+    Ok(client)
 }
 
 #[tauri::command]
 pub async fn set_default_client(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     id: String,
 ) -> Result<Client, String> {
     let now = now_iso();
@@ -162,12 +198,15 @@ pub async fn set_default_client(
         .map_err(|e| e.to_string())?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
-    get_client_by_id(pool.inner(), &id).await
+    let client = get_client_by_id(pool.inner(), &id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "client-set-default").await;
+    Ok(client)
 }
 
 #[tauri::command]
 pub async fn archive_client(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     id: String,
 ) -> Result<Client, String> {
     let now = now_iso();
@@ -180,12 +219,15 @@ pub async fn archive_client(
     .await
     .map_err(|e| e.to_string())?;
 
-    get_client_by_id(pool.inner(), &id).await
+    let client = get_client_by_id(pool.inner(), &id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "client-archive").await;
+    Ok(client)
 }
 
 #[tauri::command]
 pub async fn unarchive_client(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     id: String,
 ) -> Result<Client, String> {
     let now = now_iso();
@@ -196,5 +238,7 @@ pub async fn unarchive_client(
         .await
         .map_err(|e| e.to_string())?;
 
-    get_client_by_id(pool.inner(), &id).await
+    let client = get_client_by_id(pool.inner(), &id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "client-unarchive").await;
+    Ok(client)
 }

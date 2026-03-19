@@ -20,6 +20,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
 
   const activeTag = filters.tag_id ?? "";
   const activeInvoiced = filters.invoiced === undefined ? "all" : filters.invoiced ? "invoiced" : "uninvoiced";
+  const activeBillable = filters.billable === undefined ? "all" : filters.billable ? "billable" : "non-billable";
   const activeTags = tags.filter((tag) => !tag.is_archived);
 
   const hasDateRange = !!(filters.date_from || filters.date_to);
@@ -149,6 +150,30 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
             <button
               key={key}
               onClick={() => update("invoiced", key === "all" ? undefined : false)}
+              className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
+                active
+                  ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
+                  : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Billable pills */}
+      <div className="flex items-center gap-1">
+        {([
+          { key: "all", label: "All", value: undefined },
+          { key: "billable", label: "Billable", value: true },
+          { key: "non-billable", label: "Non-billable", value: false },
+        ] as const).map(({ key, label, value }) => {
+          const active = activeBillable === key;
+          return (
+            <button
+              key={key}
+              onClick={() => onChange({ ...filters, billable: value })}
               className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
                 active
                   ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"

@@ -4,10 +4,10 @@ import { useClients } from "../../hooks/useClients";
 import { useTags } from "../../hooks/useTags";
 import { elapsedSeconds, secondsToHHMMSS, formatTime } from "../../lib/dateUtils";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
-import { Play, Square, Check, X } from "lucide-react";
+import { Play, Square, Pause, Check, X } from "lucide-react";
 
 export function PopupTimerView() {
-  const { activeEntry, isRunning, start, stop, discard, recover } = useTimer();
+  const { activeEntry, isRunning, isPaused, pauseOffset, pausedSince, start, stop, discard, recover, pause, resume } = useTimer();
   const { activeClients, defaultClient } = useClients();
   const { tags } = useTags();
   const [elapsed, setElapsed] = useState(0);
@@ -37,15 +37,19 @@ export function PopupTimerView() {
   }, [activeEntry?.tag_id, selectableTags, tagId]);
 
   useEffect(() => {
-    if (!isRunning || !activeEntry) {
+    if (!activeEntry || (!isRunning && !isPaused)) {
       setElapsed(0);
       return;
     }
-    const tick = () => setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date));
+    if (isPaused) {
+      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset, pausedSince ?? undefined));
+      return;
+    }
+    const tick = () => setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [isRunning, activeEntry]);
+  }, [isRunning, isPaused, activeEntry, pauseOffset, pausedSince]);
 
   const handleStop = async () => {
     if (!tagId) return;
@@ -136,7 +140,7 @@ export function PopupTimerView() {
     <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
       {/* Status badge */}
       <div className="flex items-center gap-1.5">
-        {isRunning ? (
+        {isRunning && !isPaused ? (
           <>
             <span
               className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]"
@@ -144,6 +148,13 @@ export function PopupTimerView() {
             />
             <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--brand)]">
               Recording
+            </span>
+          </>
+        ) : isPaused ? (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--text-muted)]">
+              Paused
             </span>
           </>
         ) : (
@@ -170,7 +181,7 @@ export function PopupTimerView() {
       </div>
 
       {/* Client selector (not running) */}
-      {!isRunning && activeClients.length > 0 && (
+      {!isRunning && !isPaused && activeClients.length > 0 && (
         <div className="flex items-center gap-2">
           <label className="text-xs text-[var(--text-muted)]">Client</label>
           <select
@@ -186,8 +197,8 @@ export function PopupTimerView() {
         </div>
       )}
 
-      {/* Button */}
-      {!isRunning ? (
+      {/* Buttons */}
+      {!isRunning && !isPaused ? (
         <button
           onClick={() => start(selectedClientId)}
           className="flex items-center gap-2 px-5 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-medium text-sm transition-colors"
@@ -196,13 +207,25 @@ export function PopupTimerView() {
           Start
         </button>
       ) : (
-        <button
-          onClick={() => setStopping(true)}
-          className="flex items-center gap-2 px-5 py-2 rounded bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] font-medium text-sm transition-colors hover:bg-[var(--surface-3)]"
-        >
-          <Square size={13} fill="currentColor" />
-          Stop
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => isPaused ? resume() : pause()}
+            className="flex items-center gap-2 px-4 py-2 rounded bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] font-medium text-sm transition-colors hover:bg-[var(--surface-3)]"
+          >
+            {isPaused ? (
+              <><Play size={13} fill="currentColor" /> Resume</>
+            ) : (
+              <><Pause size={13} fill="currentColor" /> Pause</>
+            )}
+          </button>
+          <button
+            onClick={() => setStopping(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] font-medium text-sm transition-colors hover:bg-[var(--surface-3)]"
+          >
+            <Square size={13} fill="currentColor" />
+            Stop
+          </button>
+        </div>
       )}
     </div>
   );

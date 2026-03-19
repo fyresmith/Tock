@@ -19,33 +19,48 @@ const navItems: { id: View; label: string; icon: React.ElementType }[] = [
 ];
 
 export function Sidebar({ currentView, onNavigate }: SidebarProps) {
-  const { activeEntry, isRunning } = useTimerStore();
+  const { activeEntry, isRunning, isPaused, pauseOffset, pausedSince } = useTimerStore();
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!isRunning || !activeEntry) {
+    if (!activeEntry || (!isRunning && !isPaused)) {
       setElapsed(0);
       return;
     }
+    if (isPaused) {
+      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset, pausedSince ?? undefined));
+      return;
+    }
     const interval = setInterval(() => {
-      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date));
+      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset));
     }, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, activeEntry]);
+  }, [isRunning, isPaused, activeEntry, pauseOffset, pausedSince]);
 
   return (
-    <aside className="w-48 flex-shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--surface-1)]">
+    <aside className="w-48 flex-shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--surface-1)] shadow-[2px_0_8px_rgba(0,0,0,0.18)]" style={{ zIndex: 20 }}>
       {/* Active timer indicator */}
-      {isRunning && activeEntry && (
+      {(isRunning || isPaused) && activeEntry && (
         <div className="mx-2 mt-2 px-3 py-2 rounded bg-[var(--brand-muted)] border border-[var(--brand-muted-border)]">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]"
-              style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }}
-            />
-            <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--brand)]">
-              Recording
-            </span>
+            {isPaused ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
+                <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--text-muted)]">
+                  Paused
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]"
+                  style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }}
+                />
+                <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--brand)]">
+                  Recording
+                </span>
+              </>
+            )}
           </div>
           <div className="font-mono text-sm font-semibold text-[var(--text-primary)] tabular-nums">
             {secondsToHHMMSS(elapsed)}
@@ -61,6 +76,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
           return (
             <button
               key={item.id}
+              tabIndex={-1}
               onClick={() => onNavigate(item.id)}
               className={`relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded text-[13px] font-medium transition-colors text-left ${
                 active
@@ -78,16 +94,9 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      {/* Bottom shortcut hint */}
-      <div className="px-3 py-2.5 border-t border-[var(--border)] space-y-1">
-        <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-          <kbd className="px-1 py-0.5 rounded-sm bg-[var(--surface-3)] border border-[var(--border)] font-mono text-[9px]">Space</kbd>
-          {" "}Toggle timer
-          <br />
-          <kbd className="px-1 py-0.5 rounded-sm bg-[var(--surface-3)] border border-[var(--border)] font-mono text-[9px]">Ctrl+1–5</kbd>
-          {" "}Navigate
-        </p>
-        <p className="text-[10px] text-[var(--text-muted)]">v0.1.0</p>
+      {/* Bottom */}
+      <div className="px-3 py-2.5 border-t border-[var(--border)]">
+        <p className="text-[10px] text-[var(--text-muted)]">Tock v0.1.0</p>
       </div>
     </aside>
   );

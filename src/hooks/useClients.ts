@@ -29,14 +29,25 @@ export function useClients() {
   const defaultClient = clients.find((c) => c.is_default && !c.is_archived) ?? null;
   const activeClients = clients.filter((c) => !c.is_archived);
 
-  const add = useCallback(async (name: string, hourlyRate: number) => {
-    const client = await createClientCmd(name, hourlyRate);
+  const add = useCallback(async (
+    name: string,
+    hourlyRate: number,
+    billingName: string | null = null,
+    billingEmail: string | null = null
+  ) => {
+    const client = await createClientCmd(name, hourlyRate, billingName, billingEmail);
     setClients((prev) => [...prev, client].sort((a, b) => a.name.localeCompare(b.name)));
     return client;
   }, []);
 
-  const update = useCallback(async (id: string, name: string, hourlyRate: number) => {
-    const client = await updateClientCmd(id, name, hourlyRate);
+  const update = useCallback(async (
+    id: string,
+    name: string,
+    hourlyRate: number,
+    billingName: string | null = null,
+    billingEmail: string | null = null
+  ) => {
+    const client = await updateClientCmd(id, name, hourlyRate, billingName, billingEmail);
     setClients((prev) => prev.map((c) => (c.id === id ? client : c)));
     return client;
   }, []);

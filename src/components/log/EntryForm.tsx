@@ -25,6 +25,8 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
     tag_id: "",
     client_id: null,
   });
+  const [billable, setBillable] = useState(true);
+  const [rateOverride, setRateOverride] = useState<number | null>(null);
 
   // Pre-select default client once clients load
   useEffect(() => {
@@ -62,6 +64,8 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
         ...form,
         start_time: form.start_time + ":00",
         end_time: form.end_time + ":00",
+        billable,
+        hourly_rate: rateOverride,
       });
       onClose();
     } catch (e) {
@@ -162,6 +166,28 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               onChange={(tag_id) => setForm({ ...form, tag_id })}
               className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
             />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={billable}
+                onChange={(e) => setBillable(e.target.checked)}
+                className="rounded"
+              />
+              Billable
+            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-[var(--text-muted)]">Rate override</label>
+              <input
+                type="number"
+                placeholder="Use default"
+                value={rateOverride ?? ""}
+                onChange={(e) => setRateOverride(e.target.value ? Number(e.target.value) : null)}
+                className="w-28 bg-[var(--surface-2)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+              />
+            </div>
           </div>
 
           {error && (

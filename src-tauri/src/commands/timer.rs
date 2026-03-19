@@ -23,7 +23,9 @@ pub const TIME_ENTRY_SELECT: &str = "
     time_entries.invoice_id,
     time_entries.client_id,
     time_entries.created_at,
-    time_entries.updated_at
+    time_entries.updated_at,
+    COALESCE(time_entries.billable, 1) AS billable,
+    time_entries.hourly_rate
 ";
 
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
@@ -43,6 +45,8 @@ pub struct TimeEntry {
     pub client_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub billable: bool,
+    pub hourly_rate: Option<f64>,
 }
 
 fn now_date() -> String {
@@ -145,7 +149,10 @@ pub async fn start_timer(
         client_id,
         created_at: now.clone(),
         updated_at: now,
+        billable: true,
+        hourly_rate: None,
     };
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "timer-start").await;
     let _ = app.emit("timer-changed", ());
     Ok(entry)
 }
@@ -161,7 +168,7 @@ pub async fn stop_timer(
     let end_time = now_time();
     let now = now_iso();
 
-    let (date, start_time): (String, String) =
+    let (_date, start_time): (String, String) =
         sqlx::query_as("SELECT date, start_time FROM time_entries WHERE id = ?")
             .bind(&entry_id)
             .fetch_one(pool.inner())
@@ -187,7 +194,7 @@ pub async fn stop_timer(
     .await
     .map_err(|e| e.to_string())?;
 
-    let _ = backup::export_csv_internal(pool.inner(), &app).await;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "timer-stop").await;
     let _ = app.emit("timer-changed", ());
     fetch_time_entry_by_id(pool.inner(), &entry_id).await
 }
@@ -217,6 +224,7 @@ pub async fn discard_timer(
         .execute(pool.inner())
         .await
         .map_err(|e| e.to_string())?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "timer-discard").await;
     let _ = app.emit("timer-changed", ());
     Ok(())
 }

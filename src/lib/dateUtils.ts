@@ -60,11 +60,15 @@ export function currentMonthRange(): { from: string; to: string } {
   };
 }
 
-export function elapsedSeconds(startTimeStr: string, dateStr: string): number {
-  const [sh, sm, ss] = startTimeStr.split(":").map(Number);
-  const start = new Date(dateStr);
-  start.setHours(sh, sm, ss, 0);
-  return Math.floor((Date.now() - start.getTime()) / 1000);
+export function elapsedSeconds(
+  startTimeStr: string,
+  dateStr: string,
+  pauseOffsetMs = 0,
+  frozenAt?: number,
+): number {
+  const start = new Date(`${dateStr}T${startTimeStr}`);
+  const now = frozenAt ?? Date.now();
+  return Math.max(0, Math.floor((now - start.getTime() - pauseOffsetMs) / 1000));
 }
 
 export function secondsToHHMMSS(seconds: number): string {

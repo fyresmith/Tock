@@ -11,9 +11,11 @@ interface EntryRowProps {
   clients: Client[];
   onUpdate: (args: UpdateEntryArgs) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
 }
 
-export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowProps) {
+export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, onToggle }: EntryRowProps) {
   const clientName = entry.client_id
     ? (clients.find((c) => c.id === entry.client_id)?.name ?? null)
     : null;
@@ -23,6 +25,8 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
     tag_id: entry.tag_id ?? "",
     start_time: entry.start_time,
     end_time: entry.end_time ?? "",
+    billable: entry.billable,
+    rateOverride: entry.hourly_rate,
   });
   const [saving, setSaving] = useState(false);
   const selectableTags = getSelectableTags(tags, entry.tag_id);
@@ -36,6 +40,8 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
         tag_id: form.tag_id,
         start_time: form.start_time,
         end_time: form.end_time,
+        billable: form.billable,
+        hourly_rate: form.rateOverride,
       });
       setEditing(false);
     } finally {
@@ -49,6 +55,8 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
       tag_id: entry.tag_id ?? "",
       start_time: entry.start_time,
       end_time: entry.end_time ?? "",
+      billable: entry.billable,
+      rateOverride: entry.hourly_rate,
     });
     setEditing(false);
   };
@@ -56,6 +64,7 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
   if (editing) {
     return (
       <tr className="bg-[var(--surface-2)]">
+        <td className="px-4 py-2" />
         <td className="px-4 py-2 text-sm text-[var(--text-secondary)]">
           {formatDate(entry.date)}
         </td>
@@ -95,7 +104,25 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
         <td className="px-4 py-2 text-xs text-[var(--text-muted)] whitespace-nowrap">
           {clientName ?? <span className="opacity-40">—</span>}
         </td>
-        <td className="px-4 py-2 text-xs text-[var(--text-muted)]">—</td>
+        <td className="px-4 py-2">
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.billable}
+                onChange={(e) => setForm({ ...form, billable: e.target.checked })}
+              />
+              Billable
+            </label>
+            <input
+              type="number"
+              placeholder="Rate override"
+              value={form.rateOverride ?? ""}
+              onChange={(e) => setForm({ ...form, rateOverride: e.target.value ? Number(e.target.value) : null })}
+              className="w-24 bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+            />
+          </div>
+        </td>
         <td className="px-4 py-2">
           <div className="flex gap-1">
             <button
@@ -119,7 +146,17 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
   }
 
   return (
-    <tr className="hover:bg-[var(--surface-2)] transition-colors group">
+    <tr className={`hover:bg-[var(--surface-2)] transition-colors group ${selected ? "bg-[var(--brand-muted)]" : ""}`}>
+      <td className="px-4 py-2.5">
+        {onToggle && (
+          <input
+            type="checkbox"
+            checked={selected ?? false}
+            onChange={() => onToggle(entry.id)}
+            className="rounded"
+          />
+        )}
+      </td>
       <td className="px-4 py-2.5 text-sm text-[var(--text-secondary)] whitespace-nowrap">
         {formatDate(entry.date)}
       </td>
@@ -148,6 +185,16 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowP
       </td>
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-1">
+          {!entry.billable && (
+            <span className="px-1.5 py-0.5 rounded text-xs bg-[var(--text-muted)]/10 text-[var(--text-muted)] mr-1">
+              non-billable
+            </span>
+          )}
+          {entry.hourly_rate != null && (
+            <span className="px-1.5 py-0.5 rounded text-xs bg-[var(--brand-muted)] text-[var(--brand)] mr-1">
+              ${entry.hourly_rate}/hr
+            </span>
+          )}
           {entry.invoiced && (
             <span className="px-1.5 py-0.5 rounded text-xs bg-[var(--success)]/20 text-[var(--success)] mr-1">
               invoiced

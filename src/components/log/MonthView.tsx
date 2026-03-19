@@ -98,7 +98,7 @@ export function MonthView({
                     : "bg-[var(--surface-1)] border-[var(--border)] hover:bg-[var(--surface-2)]"
                 }`}
               >
-                <span className="block mb-1">
+                <span className="flex justify-start mb-1">
                   {isToday ? (
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--brand)] text-white text-[10px] font-bold">
                       {format(day, "d")}

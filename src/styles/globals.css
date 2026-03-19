@@ -3,23 +3,23 @@
 /* ─── Design tokens ─────────────────────────────────────────────── */
 :root {
   /* Dark theme (default) */
-  --bg:        #09090f;
-  --surface-0: #09090f;
-  --surface-1: #0f0f1c;
-  --surface-2: #161625;
-  --surface-3: #1e1e30;
+  --bg:        #202325;
+  --surface-0: #202325;
+  --surface-1: #272b2d;
+  --surface-2: #2e3234;
+  --surface-3: #363b3d;
 
-  --brand:              #7c6fec;
-  --brand-hover:        #6a5ed4;
-  --brand-muted:        rgba(124,111,236,0.12);
-  --brand-muted-border: rgba(124,111,236,0.28);
+  --brand:              #6e68b8;
+  --brand-hover:        #605ab0;
+  --brand-muted:        rgba(110,104,184,0.14);
+  --brand-muted-border: rgba(110,104,184,0.28);
 
-  --text-primary:   #e8e8f2;
-  --text-secondary: #8a8aa8;
-  --text-muted:     #525268;
+  --text-primary:   #dfe1e3;
+  --text-secondary: #8c9196;
+  --text-muted:     #5c6166;
 
-  --border:        rgba(255,255,255,0.11);
-  --border-strong: rgba(255,255,255,0.20);
+  --border:        rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
 
   --danger:  #f87171;
   --success: #4ade80;
@@ -37,10 +37,10 @@
   --surface-2: #e4e4ec;
   --surface-3: #d8d8e4;
 
-  --brand:              #5b50cc;
-  --brand-hover:        #4a40b5;
-  --brand-muted:        rgba(91,80,204,0.10);
-  --brand-muted-border: rgba(91,80,204,0.28);
+  --brand:              #5c57c8;
+  --brand-hover:        #4c48b5;
+  --brand-muted:        rgba(92,87,200,0.10);
+  --brand-muted-border: rgba(92,87,200,0.28);
 
   --text-primary:   #18182c;
   --text-secondary: #44446a;
@@ -74,7 +74,7 @@
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Ubuntu", "Cantarell", "Noto Sans", "Segoe UI", system-ui, sans-serif;
     font-size: 13px;
     background-color: var(--surface-0);
     color: var(--text-primary);
@@ -100,6 +100,12 @@
 *:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+}
+
+/* ─── Button press ──────────────────────────────────────────────── */
+button:not(:disabled):active {
+  transform: scale(0.97);
+  filter: brightness(0.9);
 }
 
 /* ─── Animations ─────────────────────────────────────────────────── */

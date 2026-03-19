@@ -1,9 +1,10 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use std::collections::HashSet;
+use std::{collections::HashSet, fs, path::Path};
 use uuid::Uuid;
 
+use crate::backup;
 use crate::commands::clients::resolve_hourly_rate;
 use crate::commands::timer::{TimeEntry, TIME_ENTRY_SELECT};
 
@@ -62,11 +63,48 @@ fn now_iso() -> String {
     Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
-fn invoice_totals(entries: &[TimeEntry], hourly_rate: f64) -> (f64, f64) {
-    let total_minutes: i64 = entries.iter().filter_map(|entry| entry.duration_minutes).sum();
-    let total_hours = total_minutes as f64 / 60.0;
-    let total_amount = (total_hours * hourly_rate * 100.0).round() / 100.0;
+fn apply_rounding(minutes: i64, rounding: &str) -> i64 {
+    match rounding {
+        "15" => ((minutes + 14) / 15) * 15,
+        "30" => ((minutes + 29) / 30) * 30,
+        "60" => ((minutes + 59) / 60) * 60,
+        _ => minutes,
+    }
+}
+
+fn resolve_entry_rate(entry_rate: Option<f64>, default_rate: f64) -> f64 {
+    entry_rate.unwrap_or(default_rate)
+}
+
+fn invoice_totals(entries: &[TimeEntry], default_rate: f64, rounding: &str) -> (f64, f64) {
+    let total_amount: f64 = entries
+        .iter()
+        .filter(|e| e.billable)
+        .map(|e| {
+            let mins = e.duration_minutes.unwrap_or(0);
+            let rounded_mins = apply_rounding(mins, rounding);
+            let rate = resolve_entry_rate(e.hourly_rate, default_rate);
+            (rounded_mins as f64 / 60.0) * rate
+        })
+        .sum();
+    let total_amount = (total_amount * 100.0).round() / 100.0;
+    let total_hours: f64 = entries
+        .iter()
+        .filter(|e| e.billable)
+        .filter_map(|e| e.duration_minutes)
+        .map(|m| apply_rounding(m, rounding) as f64 / 60.0)
+        .sum();
     (total_hours, total_amount)
+}
+
+async fn get_time_rounding(pool: &SqlitePool) -> String {
+    sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = 'time_rounding'")
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(v,)| v)
+        .unwrap_or_else(|| "none".to_string())
 }
 
 fn empty_entries_error() -> String {
@@ -199,7 +237,7 @@ async fn fetch_invoice_snapshot_entries(
             date,
             start_time,
             end_time,
-            duration_minutes,
+            COALESCE(billed_minutes, duration_minutes) AS duration_minutes,
             description,
             tag_name AS entry_type,
             tag_id,
@@ -209,7 +247,9 @@ async fn fetch_invoice_snapshot_entries(
             invoice_id,
             NULL AS client_id,
             created_at,
-            created_at AS updated_at
+            created_at AS updated_at,
+            COALESCE(billable, 1) AS billable,
+            hourly_rate
          FROM invoice_entry_snapshots
          WHERE invoice_id = ?
          ORDER BY date ASC, start_time ASC, created_at ASC",
@@ -230,6 +270,7 @@ async fn preview_invoice_internal(
     client_id: Option<String>,
 ) -> Result<InvoicePreview, String> {
     let hourly_rate = resolve_hourly_rate(pool, client_id.as_deref()).await?;
+    let rounding = get_time_rounding(pool).await;
     let entries =
         fetch_preview_entries(pool, &period_start, &period_end, client_id.as_deref()).await?;
 
@@ -237,7 +278,7 @@ async fn preview_invoice_internal(
         return Err(empty_entries_error());
     }
 
-    let (total_hours, total_amount) = invoice_totals(&entries, hourly_rate);
+    let (total_hours, total_amount) = invoice_totals(&entries, hourly_rate, &rounding);
 
     // Fetch client name for the preview if a client is specified.
     let client_name: Option<String> = if let Some(ref cid) = client_id {
@@ -285,6 +326,7 @@ async fn create_invoice_internal(
     }
 
     let hourly_rate = resolve_hourly_rate(pool, client_id.as_deref()).await?;
+    let rounding = get_time_rounding(pool).await;
 
     // Snapshot the client name so the invoice stays readable after client edits.
     let client_name: Option<String> = if let Some(ref cid) = client_id {
@@ -350,7 +392,7 @@ async fn create_invoice_internal(
         return Err(empty_entries_error());
     }
 
-    let (total_hours, total_amount) = invoice_totals(&entries, hourly_rate);
+    let (total_hours, total_amount) = invoice_totals(&entries, hourly_rate, &rounding);
 
     let month_str = &period_start[..7].replace('-', "");
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM invoices")
@@ -422,7 +464,8 @@ pub async fn ensure_invoice_editable(pool: &SqlitePool, invoice_id: &str) -> Res
 pub async fn sync_invoice_totals(pool: &SqlitePool, invoice_id: &str) -> Result<(), String> {
     let invoice = ensure_invoice_editable(pool, invoice_id).await?;
     let entries = fetch_invoice_live_entries(pool, invoice_id).await?;
-    let (total_hours, total_amount) = invoice_totals(&entries, invoice.hourly_rate);
+    let rounding = get_time_rounding(pool).await;
+    let (total_hours, total_amount) = invoice_totals(&entries, invoice.hourly_rate, &rounding);
 
     sqlx::query("UPDATE invoices SET total_hours = ?, total_amount = ? WHERE id = ?")
         .bind(total_hours)
@@ -484,6 +527,7 @@ async fn send_invoice_internal(
         return Err("Cannot send an invoice with no linked entries".into());
     }
 
+    let rounding = get_time_rounding(pool).await;
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     sqlx::query("DELETE FROM invoice_entry_snapshots WHERE invoice_id = ?")
         .bind(invoice_id)
@@ -492,15 +536,23 @@ async fn send_invoice_internal(
         .map_err(|e| e.to_string())?;
 
     for entry in &live_entries {
-        let hours = entry.duration_minutes.unwrap_or(0) as f64 / 60.0;
-        let amount = (hours * invoice.hourly_rate * 100.0).round() / 100.0;
+        let mins = apply_rounding(entry.duration_minutes.unwrap_or(0), &rounding);
+        let hours = mins as f64 / 60.0;
+        let entry_rate = resolve_entry_rate(entry.hourly_rate, invoice.hourly_rate);
+        let billable = entry.billable;
+        let billed_minutes = if billable { mins } else { 0 };
+        let amount = if billable {
+            (hours * entry_rate * 100.0).round() / 100.0
+        } else {
+            0.0
+        };
 
         sqlx::query(
             "INSERT INTO invoice_entry_snapshots (
                 id, invoice_id, entry_id, date, start_time, end_time, duration_minutes, description,
-                tag_id, tag_name, tag_color, hourly_rate, amount, created_at
+                tag_id, tag_name, tag_color, billable, billed_minutes, hourly_rate, amount, created_at
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(invoice_id)
@@ -513,7 +565,9 @@ async fn send_invoice_internal(
         .bind(&entry.tag_id)
         .bind(&entry.tag_name)
         .bind(&entry.tag_color)
-        .bind(invoice.hourly_rate)
+        .bind(billable)
+        .bind(billed_minutes)
+        .bind(entry_rate)
         .bind(amount)
         .bind(&sent_at)
         .execute(&mut *tx)
@@ -563,6 +617,7 @@ pub async fn preview_invoice(
 #[tauri::command]
 pub async fn create_invoice(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     period_start: String,
     period_end: String,
     entry_ids: Vec<String>,
@@ -571,7 +626,7 @@ pub async fn create_invoice(
     name: Option<String>,
     client_id: Option<String>,
 ) -> Result<InvoiceWithEntries, String> {
-    create_invoice_internal(
+    let result = create_invoice_internal(
         pool.inner(),
         period_start,
         period_end,
@@ -581,7 +636,9 @@ pub async fn create_invoice(
         name,
         client_id,
     )
-    .await
+    .await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-create").await;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -610,16 +667,20 @@ pub async fn regenerate_invoice(
 #[tauri::command]
 pub async fn issue_invoice(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     invoice_id: String,
     issued_at: String,
     due_at: String,
 ) -> Result<Invoice, String> {
-    issue_invoice_internal(pool.inner(), &invoice_id, issued_at, due_at).await
+    let invoice = issue_invoice_internal(pool.inner(), &invoice_id, issued_at, due_at).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-issue").await;
+    Ok(invoice)
 }
 
 #[tauri::command]
 pub async fn revert_invoice_to_draft(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     invoice_id: String,
 ) -> Result<Invoice, String> {
     let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
@@ -635,21 +696,73 @@ pub async fn revert_invoice_to_draft(
     .await
     .map_err(|e| e.to_string())?;
 
-    fetch_invoice_by_id(pool.inner(), &invoice_id).await
+    let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-revert").await;
+    Ok(invoice)
+}
+
+#[tauri::command]
+pub async fn cancel_invoice(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    invoice_id: String,
+) -> Result<Invoice, String> {
+    let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
+    if invoice.status == "draft" {
+        return Err("Invoice is already a draft".into());
+    }
+
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    // Free all time entries linked to this invoice
+    sqlx::query("UPDATE time_entries SET invoiced = 0, invoice_id = NULL WHERE invoice_id = ?")
+        .bind(&invoice_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Remove any locked snapshots
+    sqlx::query("DELETE FROM invoice_entry_snapshots WHERE invoice_id = ?")
+        .bind(&invoice_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Reset invoice to draft
+    sqlx::query(
+        "UPDATE invoices
+         SET status = 'draft', issued_at = NULL, sent_at = NULL,
+             due_at = NULL, paid_at = NULL, locked_at = NULL
+         WHERE id = ?",
+    )
+    .bind(&invoice_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-cancel").await;
+    Ok(invoice)
 }
 
 #[tauri::command]
 pub async fn send_invoice(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     invoice_id: String,
     sent_at: String,
 ) -> Result<Invoice, String> {
-    send_invoice_internal(pool.inner(), &invoice_id, sent_at).await
+    let invoice = send_invoice_internal(pool.inner(), &invoice_id, sent_at).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-send").await;
+    Ok(invoice)
 }
 
 #[tauri::command]
 pub async fn mark_invoice_paid(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     invoice_id: String,
     paid_at: String,
 ) -> Result<Invoice, String> {
@@ -667,7 +780,9 @@ pub async fn mark_invoice_paid(
     .await
     .map_err(|e| e.to_string())?;
 
-    fetch_invoice_by_id(pool.inner(), &invoice_id).await
+    let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-mark-paid").await;
+    Ok(invoice)
 }
 
 #[tauri::command]
@@ -686,6 +801,7 @@ pub async fn get_invoice_entries(
 #[tauri::command]
 pub async fn delete_invoice(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     invoice_id: String,
 ) -> Result<(), String> {
     let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
@@ -719,7 +835,45 @@ pub async fn delete_invoice(
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-delete").await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn save_invoice_pdf(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    invoice_id: String,
+    path: String,
+    bytes: Vec<u8>,
+) -> Result<Invoice, String> {
+    fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
+
+    if path.trim().is_empty() {
+        return Err("Choose a PDF destination".into());
+    }
+    if bytes.is_empty() {
+        return Err("Cannot save an empty PDF".into());
+    }
+
+    if let Some(parent) = Path::new(&path).parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+
+    sqlx::query("UPDATE invoices SET pdf_path = ? WHERE id = ?")
+        .bind(&path)
+        .bind(&invoice_id)
+        .execute(pool.inner())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let invoice = fetch_invoice_by_id(pool.inner(), &invoice_id).await?;
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "invoice-save-pdf").await;
+    Ok(invoice)
 }
 
 #[cfg(test)]
@@ -750,11 +904,20 @@ mod tests {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
                 hourly_rate REAL NOT NULL DEFAULT 0,
+                billing_name TEXT,
+                billing_email TEXT,
                 is_default INTEGER NOT NULL DEFAULT 0,
                 is_archived INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )",
+            "ALTER TABLE clients ADD COLUMN billing_name TEXT",
+            "ALTER TABLE clients ADD COLUMN billing_email TEXT",
+            "ALTER TABLE time_entries ADD COLUMN billable INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE time_entries ADD COLUMN hourly_rate REAL",
+            "ALTER TABLE invoice_entry_snapshots ADD COLUMN billable INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE invoice_entry_snapshots ADD COLUMN billed_minutes INTEGER",
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('time_rounding', 'none')",
         ] {
             let _ = sqlx::query(stmt).execute(&pool).await;
         }

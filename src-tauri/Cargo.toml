@@ -24,3 +24,6 @@ csv = "1"
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "chrono"] }
 dirs = "5"
+sha2 = "0.10"
+walkdir = "2"
+crc32fast = "1"
