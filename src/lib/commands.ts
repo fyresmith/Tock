@@ -1,0 +1,243 @@
+import { invoke } from "@tauri-apps/api/core";
+
+export interface TimeEntry {
+  id: string;
+  date: string;
+  start_time: string;
+  end_time: string | null;
+  duration_minutes: number | null;
+  description: string;
+  entry_type: string;
+  tag_id: string | null;
+  tag_name: string;
+  tag_color: string;
+  invoiced: boolean;
+  invoice_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EntryTag {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InvoiceFormat = "detailed" | "weekly" | "daily" | "simple" | "type-breakdown";
+export type InvoiceStatus = "draft" | "issued" | "sent" | "paid";
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  period_start: string;
+  period_end: string;
+  total_hours: number;
+  hourly_rate: number;
+  total_amount: number;
+  status: InvoiceStatus;
+  pdf_path: string | null;
+  created_at: string;
+  issued_at: string | null;
+  sent_at: string | null;
+  due_at: string | null;
+  paid_at: string | null;
+  locked_at: string | null;
+  format: InvoiceFormat;
+  layout_data: string | null;
+  name: string | null;
+  is_overdue: boolean;
+  is_locked: boolean;
+}
+
+export interface InvoiceWithEntries {
+  invoice: Invoice;
+  entries: TimeEntry[];
+}
+
+export interface InvoicePreview {
+  invoice_number: string | null;
+  period_start: string;
+  period_end: string;
+  total_hours: number;
+  hourly_rate: number;
+  total_amount: number;
+  format: InvoiceFormat;
+  layout_data: string | null;
+  name: string | null;
+  issued_at: string;
+  entries: TimeEntry[];
+}
+
+export interface Settings {
+  hourly_rate: string;
+  currency: string;
+  user_name: string;
+  user_email: string;
+  employer_name: string;
+  backup_csv_path: string;
+  theme: string;
+  invoice_notes: string;
+}
+
+export interface DailyBar {
+  date: string;
+  hours: number;
+}
+
+export interface WeeklyBar {
+  week: string;
+  hours: number;
+}
+
+export interface MonthlyBar {
+  month: string;
+  hours: number;
+}
+
+export interface DashboardData {
+  week_hours: number;
+  month_hours: number;
+  last_month_hours: number;
+  ytd_hours: number;
+  week_earnings: number;
+  month_earnings: number;
+  last_month_earnings: number;
+  ytd_earnings: number;
+  daily_bars: DailyBar[];
+  weekly_trend: WeeklyBar[];
+  monthly_bars: MonthlyBar[];
+}
+
+// ── Timer ──────────────────────────────────────────────────────────
+export const startTimer = () => invoke<TimeEntry>("start_timer");
+
+export const stopTimer = (entryId: string, description: string, tagId: string) =>
+  invoke<TimeEntry>("stop_timer", { entryId, description, tagId });
+
+export const getActiveTimer = () => invoke<TimeEntry | null>("get_active_timer");
+
+export const discardTimer = (entryId: string) =>
+  invoke<void>("discard_timer", { entryId });
+
+// ── Entries ────────────────────────────────────────────────────────
+export interface CreateEntryArgs {
+  date: string;
+  start_time: string;
+  end_time: string;
+  description: string;
+  tag_id: string;
+}
+
+export interface UpdateEntryArgs {
+  id: string;
+  date?: string;
+  start_time?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  description?: string;
+  tag_id?: string;
+}
+
+export interface ListEntriesArgs {
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  tag_id?: string;
+  invoiced?: boolean;
+}
+
+export const createEntry = (args: CreateEntryArgs) =>
+  invoke<TimeEntry>("create_entry", { args });
+
+export const updateEntry = (args: UpdateEntryArgs) =>
+  invoke<TimeEntry>("update_entry", { args });
+
+export const deleteEntry = (id: string) => invoke<void>("delete_entry", { id });
+
+export const listEntries = (args: ListEntriesArgs = {}) =>
+  invoke<TimeEntry[]>("list_entries", { args });
+
+// ── Invoices ───────────────────────────────────────────────────────
+export const previewInvoice = (
+  periodStart: string,
+  periodEnd: string,
+  format: InvoiceFormat = "detailed",
+  layoutData: string | null = null,
+  name: string | null = null
+) =>
+  invoke<InvoicePreview>("preview_invoice", {
+    periodStart,
+    periodEnd,
+    format,
+    layoutData,
+    name,
+  });
+
+export const createInvoice = (
+  periodStart: string,
+  periodEnd: string,
+  entryIds: string[],
+  format: InvoiceFormat = "detailed",
+  layoutData: string | null = null,
+  name: string | null = null
+) =>
+  invoke<InvoiceWithEntries>("create_invoice", {
+    periodStart,
+    periodEnd,
+    entryIds,
+    format,
+    layoutData,
+    name,
+  });
+
+export const listInvoices = () => invoke<Invoice[]>("list_invoices");
+
+export const regenerateInvoice = (invoiceId: string) =>
+  invoke<InvoiceWithEntries>("regenerate_invoice", { invoiceId });
+
+export const issueInvoice = (invoiceId: string, issuedAt: string, dueAt: string) =>
+  invoke<Invoice>("issue_invoice", { invoiceId, issuedAt, dueAt });
+
+export const revertInvoiceToDraft = (invoiceId: string) =>
+  invoke<Invoice>("revert_invoice_to_draft", { invoiceId });
+
+export const sendInvoice = (invoiceId: string, sentAt: string) =>
+  invoke<Invoice>("send_invoice", { invoiceId, sentAt });
+
+export const markInvoicePaid = (invoiceId: string, paidAt: string) =>
+  invoke<Invoice>("mark_invoice_paid", { invoiceId, paidAt });
+
+export const getInvoiceEntries = (invoiceId: string) =>
+  invoke<TimeEntry[]>("get_invoice_entries", { invoiceId });
+
+export const deleteInvoice = (invoiceId: string) =>
+  invoke<void>("delete_invoice", { invoiceId });
+
+// ── Settings ───────────────────────────────────────────────────────
+export const getSettings = () => invoke<Settings>("get_settings");
+
+export const updateSetting = (key: string, value: string) =>
+  invoke<Settings>("update_setting", { key, value });
+
+export const exportCsv = () => invoke<string>("export_csv");
+
+export const getDashboardData = () => invoke<DashboardData>("get_dashboard_data");
+
+// ── Tags ───────────────────────────────────────────────────────────
+export const listTags = () => invoke<EntryTag[]>("list_tags");
+
+export const createTag = (name: string, color: string) =>
+  invoke<EntryTag>("create_tag", { args: { name, color } });
+
+export const updateTag = (id: string, name: string, color: string) =>
+  invoke<EntryTag>("update_tag", { args: { id, name, color } });
+
+export const archiveTag = (id: string) =>
+  invoke<EntryTag>("archive_tag", { id });
+
+export const unarchiveTag = (id: string) =>
+  invoke<EntryTag>("unarchive_tag", { id });

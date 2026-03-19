@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+/* ─── Design tokens ─────────────────────────────────────────────── */
+:root {
+  /* Dark theme (default) */
+  --bg:        #0c0c14;
+  --surface-0: #0c0c14;
+  --surface-1: #131320;
+  --surface-2: #1c1c2e;
+  --surface-3: #252540;
+
+  --brand:              #7c6fec;
+  --brand-hover:        #6a5ed4;
+  --brand-muted:        rgba(124,111,236,0.15);
+  --brand-muted-border: rgba(124,111,236,0.35);
+
+  --text-primary:   #ededf5;
+  --text-secondary: #9a9ab0;
+  --text-muted:     #5c5c78;
+
+  --border:        rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.14);
+
+  --danger:  #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+
+  --timer-glow:    rgba(124,111,236,0.28);
+  --timer-glow-lg: rgba(124,111,236,0.12);
+
+  --type-work:    #818cf8;
+  --type-meeting: #c084fc;
+  --type-admin:   #94a3b8;
+}
+
+.light {
+  --bg:        #f5f5f8;
+  --surface-0: #f5f5f8;
+  --surface-1: #ffffff;
+  --surface-2: #f0f0f5;
+  --surface-3: #e4e4ed;
+
+  --brand:              #5b50cc;
+  --brand-hover:        #4a40b5;
+  --brand-muted:        rgba(91,80,204,0.10);
+  --brand-muted-border: rgba(91,80,204,0.30);
+
+  --text-primary:   #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted:     #8888a8;
+
+  --border:        rgba(0,0,0,0.08);
+  --border-strong: rgba(0,0,0,0.14);
+
+  --danger:  #ef4444;
+  --success: #16a34a;
+  --warning: #d97706;
+
+  --timer-glow:    rgba(91,80,204,0.20);
+  --timer-glow-lg: rgba(91,80,204,0.08);
+
+  --type-work:    #4f46e5;
+  --type-meeting: #9333ea;
+  --type-admin:   #64748b;
+}
+
+/* ─── Base ──────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background-color: var(--surface-0);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 3px;
+}
+
+/* ─── Focus ─────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ─── Animations ─────────────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes timer-tick {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+
+/* ─── Utilities ─────────────────────────────────────────────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.type-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

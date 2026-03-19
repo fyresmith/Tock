@@ -1,0 +1,176 @@
+import { useState, useRef, useEffect } from "react";
+import { CreateEntryArgs } from "../../lib/commands";
+import { useTags } from "../../hooks/useTags";
+import { today } from "../../lib/dateUtils";
+import { getSelectableTags, TagSelect } from "../tags/TagSelect";
+import { X, AlertCircle } from "lucide-react";
+
+interface EntryFormProps {
+  onAdd: (args: CreateEntryArgs) => Promise<void>;
+  onClose: () => void;
+}
+
+export function EntryForm({ onAdd, onClose }: EntryFormProps) {
+  const { tags } = useTags();
+  const [form, setForm] = useState<CreateEntryArgs>({
+    date: today(),
+    start_time: "",
+    end_time: "",
+    description: "",
+    tag_id: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const firstRef = useRef<HTMLInputElement>(null);
+  const selectableTags = getSelectableTags(tags);
+
+  useEffect(() => {
+    firstRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (form.tag_id || selectableTags.length === 0) return;
+    setForm((current) => ({ ...current, tag_id: selectableTags[0].id }));
+  }, [form.tag_id, selectableTags]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.start_time || !form.end_time) {
+      setError("Start and end times are required");
+      return;
+    }
+    if (!form.tag_id) {
+      setError("Choose a tag");
+      return;
+    }
+    if (form.start_time >= form.end_time) {
+      setError("End time must be after start time");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await onAdd({
+        ...form,
+        start_time: form.start_time + ":00",
+        end_time: form.end_time + ":00",
+      });
+      onClose();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-strong)] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-slide-up">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">
+            Add Manual Entry
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+              Date
+            </label>
+            <input
+              ref={firstRef}
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+              required
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+                Start time
+              </label>
+              <input
+                type="time"
+                value={form.start_time}
+                onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+                required
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+                End time
+              </label>
+              <input
+                type="time"
+                value={form.end_time}
+                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+              Description
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="What did you work on?"
+              rows={2}
+              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus:border-[var(--brand)] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+              Tag
+            </label>
+            <TagSelect
+              tags={selectableTags}
+              value={form.tag_id}
+              onChange={(tag_id) => setForm({ ...form, tag_id })}
+              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-[var(--danger)]">
+              <AlertCircle size={13} />
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-2 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Adding…" : "Add Entry"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
