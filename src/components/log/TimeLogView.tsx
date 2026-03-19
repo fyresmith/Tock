@@ -69,12 +69,12 @@ export function TimeLogView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* ── Header ── */}
-      <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--surface-1)]">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-5 py-3 border-b border-[var(--border)] bg-[var(--surface-1)]">
+        <div className="flex items-center justify-between mb-2.5">
           <div>
-            <h1 className="text-base font-semibold text-[var(--text-primary)]">Time Log</h1>
+            <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Time Log</h1>
             {viewMode === "list" && (
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                 {entries.length > 0
                   ? `${entries.length} entries · ${minutesToHHMM(totalMinutes)}${dateRange ? ` · ${dateRange}` : ""}`
                   : dateRange ?? "All entries"}
@@ -84,12 +84,12 @@ export function TimeLogView() {
 
           <div className="flex items-center gap-2">
             {/* View toggle */}
-            <div className="flex items-center gap-0.5 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg p-0.5">
+            <div className="flex items-center gap-px bg-[var(--surface-2)] border border-[var(--border)] rounded p-0.5">
               {(["list", "month"] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => handleSetViewMode(mode)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-all ${
+                  className={`px-2.5 py-0.5 rounded-sm text-xs font-medium capitalize transition-all ${
                     viewMode === mode
                       ? "bg-[var(--surface-3)] text-[var(--text-primary)]"
                       : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
@@ -102,9 +102,9 @@ export function TimeLogView() {
 
             <button
               onClick={() => setShowForm(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-medium transition-colors"
             >
-              <Plus size={15} />
+              <Plus size={12} />
               Add Entry
             </button>
           </div>
@@ -117,25 +117,25 @@ export function TimeLogView() {
 
         {/* Month mode: month nav */}
         {viewMode === "month" && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={goToPrevMonth}
-              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={14} />
             </button>
-            <span className="text-sm font-medium text-[var(--text-primary)] w-36 text-center">
+            <span className="text-xs font-medium text-[var(--text-primary)] w-32 text-center">
               {format(calendarMonth, "MMMM yyyy")}
             </span>
             <button
               onClick={goToNextMonth}
-              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={14} />
             </button>
             <button
               onClick={goToToday}
-              className="ml-1 px-2.5 py-1 rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors border border-[var(--border)]"
+              className="ml-1 px-2 py-0.5 rounded text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors border border-[var(--border)]"
             >
               Today
             </button>

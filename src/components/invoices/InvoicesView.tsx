@@ -18,6 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { DatePicker } from "../ui/DatePicker";
 
 function todayDate() {
   return format(new Date(), "yyyy-MM-dd");
@@ -77,34 +78,34 @@ function InvoiceDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-5">
-      <div className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-[1.75rem] border border-[var(--border-strong)] bg-[var(--surface-1)] shadow-2xl animate-slide-up flex flex-col">
-        <div className="border-b border-[var(--border)] px-6 py-5 flex items-start justify-between gap-4">
+      <div className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded border border-[var(--border-strong)] bg-[var(--surface-1)] shadow-2xl animate-slide-up flex flex-col">
+        <div className="border-b border-[var(--border)] px-5 py-4 flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold text-[var(--text-primary)]">
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                 {invoice.name || invoice.invoice_number}
               </h2>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusTone(invoice)}`}>
+              <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${statusTone(invoice)}`}>
                 {statusLabel(invoice)}
               </span>
             </div>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
               {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-xl p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
+            className="rounded p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-6 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Lifecycle</p>
-              <div className="mt-4 space-y-2 text-sm">
+        <div className="flex-1 overflow-auto p-4 grid gap-3 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <div className="space-y-3">
+            <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <p className="text-xs font-semibold text-[var(--text-primary)]">Lifecycle</p>
+              <div className="mt-3 space-y-2 text-xs">
                 <div className="flex justify-between text-[var(--text-secondary)]">
                   <span>Created</span>
                   <span>{formatDate(invoice.created_at.slice(0, 10))}</span>
@@ -136,9 +137,9 @@ function InvoiceDetailModal({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Totals</p>
-              <div className="mt-4 space-y-2 text-sm">
+            <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <p className="text-xs font-semibold text-[var(--text-primary)]">Totals</p>
+              <div className="mt-3 space-y-2 text-xs">
                 <div className="flex justify-between text-[var(--text-secondary)]">
                   <span>Hours</span>
                   <span className="text-[var(--text-primary)] tabular-nums">{invoice.total_hours.toFixed(2)}h</span>
@@ -147,18 +148,18 @@ function InvoiceDetailModal({
                   <span>Rate</span>
                   <span className="text-[var(--text-primary)]">{formatCurrency(invoice.hourly_rate, currency)}/hr</span>
                 </div>
-                <div className="flex justify-between border-t border-[var(--border)] pt-3 font-semibold text-[var(--text-primary)]">
+                <div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--text-primary)]">
                   <span>Total</span>
                   <span>{formatCurrency(invoice.total_amount, currency)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-5 space-y-3">
+            <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3 space-y-2">
               <button
                 onClick={onDownload}
                 disabled={working !== null}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
               >
                 <Download size={15} />
                 Download PDF
@@ -170,17 +171,12 @@ function InvoiceDetailModal({
                     <label className="block mb-1 text-xs font-medium text-[var(--text-secondary)]">
                       Due date
                     </label>
-                    <input
-                      type="date"
-                      value={dueAt}
-                      onChange={(event) => setDueAt(event.target.value)}
-                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-                    />
+                    <DatePicker value={dueAt} onChange={setDueAt} />
                   </div>
                   <button
                     onClick={() => onIssue(dueAt)}
                     disabled={working !== null}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50"
                   >
                     <ExternalLink size={15} />
                     Issue Invoice
@@ -193,7 +189,7 @@ function InvoiceDetailModal({
                   <button
                     onClick={onSend}
                     disabled={working !== null}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50"
                   >
                     <Mail size={15} />
                     Mark Sent
@@ -201,7 +197,7 @@ function InvoiceDetailModal({
                   <button
                     onClick={onRevert}
                     disabled={working !== null}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--surface-1)] border border-[var(--border)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors disabled:opacity-50"
                   >
                     <ArrowLeftCircle size={15} />
                     Revert To Draft
@@ -215,17 +211,12 @@ function InvoiceDetailModal({
                     <label className="block mb-1 text-xs font-medium text-[var(--text-secondary)]">
                       Paid date
                     </label>
-                    <input
-                      type="date"
-                      value={paidAt}
-                      onChange={(event) => setPaidAt(event.target.value)}
-                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-                    />
+                    <DatePicker value={paidAt} onChange={setPaidAt} />
                   </div>
                   <button
                     onClick={() => onMarkPaid(paidAt)}
                     disabled={working !== null}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[var(--success)]/15 hover:bg-[var(--success)]/25 text-sm text-[var(--success)] font-medium transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--success)]/15 hover:bg-[var(--success)]/25 text-sm text-[var(--success)] font-medium transition-colors disabled:opacity-50"
                   >
                     <CheckCircle size={15} />
                     Mark Paid
@@ -237,7 +228,7 @@ function InvoiceDetailModal({
                 <button
                   onClick={onDelete}
                   disabled={working !== null}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-[var(--danger)]/15 hover:bg-[var(--danger)]/25 text-sm text-[var(--danger)] font-medium transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded bg-[var(--danger)]/15 hover:bg-[var(--danger)]/25 text-sm text-[var(--danger)] font-medium transition-colors disabled:opacity-50"
                 >
                   <Trash2 size={15} />
                   Delete Invoice
@@ -246,10 +237,10 @@ function InvoiceDetailModal({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden flex flex-col">
-            <div className="border-b border-[var(--border)] px-5 py-4">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Entries</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
+          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden flex flex-col">
+            <div className="border-b border-[var(--border)] px-4 py-3">
+              <p className="text-xs font-semibold text-[var(--text-primary)]">Entries</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                 {invoice.is_locked
                   ? "Locked invoices show frozen snapshot rows."
                   : "Draft and issued invoices show live linked entries."}
@@ -387,18 +378,18 @@ export function InvoicesView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--surface-1)] flex items-center justify-between">
-        <h1 className="text-base font-semibold text-[var(--text-primary)]">Invoices</h1>
+      <div className="px-5 py-3 border-b border-[var(--border)] bg-[var(--surface-1)] flex items-center justify-between">
+        <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Invoices</h1>
         <button
           onClick={() => setShowGenerate(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-medium transition-colors"
         >
-          <FilePlus size={15} />
+          <FilePlus size={12} />
           Generate Invoice
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4">
         {loading ? (
           <div className="flex items-center justify-center h-32 text-[var(--text-muted)]">Loading…</div>
         ) : error ? (
@@ -410,31 +401,31 @@ export function InvoicesView() {
             <p className="text-xs">Generate your first invoice from your time entries</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-5xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 max-w-5xl">
             {invoices.map((invoice) => (
               <div
                 key={invoice.id}
-                className="bg-[var(--surface-1)] border border-[var(--border)] rounded-xl p-4 flex flex-col gap-3"
+                className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-3 flex flex-col gap-2.5"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-base font-bold text-[var(--text-primary)] leading-tight">
+                    <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight">
                       {invoice.name || invoice.invoice_number}
                     </p>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                       {invoice.invoice_number}
                     </p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusTone(invoice)}`}>
+                  <span className={`rounded px-2 py-0.5 text-[11px] font-medium capitalize flex-shrink-0 ${statusTone(invoice)}`}>
                     {statusLabel(invoice)}
                   </span>
                 </div>
 
-                <p className="text-sm text-[var(--text-secondary)]">
+                <p className="text-xs text-[var(--text-secondary)]">
                   {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
                 </p>
 
-                <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)]">
+                <div className="grid grid-cols-2 gap-1 text-xs text-[var(--text-muted)]">
                   <div>{invoice.total_hours.toFixed(2)}h</div>
                   <div className="text-right text-[var(--text-secondary)] font-medium">
                     {formatCurrency(invoice.total_amount, currency)}
@@ -447,19 +438,19 @@ export function InvoicesView() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 border-t border-[var(--border)]">
+                <div className="flex items-center gap-1.5 pt-2 border-t border-[var(--border)]">
                   <button
                     onClick={() => openInvoice(invoice)}
-                    className="flex-1 px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm text-[var(--text-primary)] border border-[var(--border)] transition-colors"
+                    className="flex-1 px-3 py-1.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-xs text-[var(--text-primary)] border border-[var(--border)] transition-colors"
                   >
                     Open
                   </button>
                   <button
                     onClick={() => handleDownload(invoice)}
                     disabled={working === `download-${invoice.id}`}
-                    className="px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm text-[var(--text-secondary)] border border-[var(--border)] transition-colors disabled:opacity-50"
+                    className="px-3 py-1.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-xs text-[var(--text-secondary)] border border-[var(--border)] transition-colors disabled:opacity-50"
                   >
-                    <Download size={14} />
+                    <Download size={13} />
                   </button>
                 </div>
               </div>

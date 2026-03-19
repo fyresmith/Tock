@@ -48,7 +48,7 @@ function TextInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+      className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
     />
   );
 }
@@ -82,28 +82,28 @@ function TagManager() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 space-y-3">
-        <div className="grid grid-cols-[1fr_auto] gap-3">
+      <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3 space-y-2.5">
+        <div className="grid grid-cols-[1fr_auto] gap-2">
           <TextInput value={name} onChange={setName} placeholder="Tag name" />
           <input
             type="color"
             value={color}
             onChange={(event) => setColor(event.target.value)}
-            className="h-9 w-12 rounded-lg border border-[var(--border)] bg-[var(--surface-1)]"
+            className="h-8 w-10 rounded border border-[var(--border)] bg-[var(--surface-1)]"
           />
         </div>
         {error && <p className="text-xs text-[var(--danger)]">{error}</p>}
         <div className="flex gap-2">
           <button
             onClick={handleSubmit}
-            className="px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium transition-colors"
+            className="px-3 py-1.5 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-medium transition-colors"
           >
             {editingId ? "Save Tag" : "Add Tag"}
           </button>
           {editingId && (
             <button
               onClick={resetForm}
-              className="px-3 py-1.5 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
+              className="px-3 py-1.5 rounded text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
             >
               Cancel
             </button>
@@ -111,43 +111,43 @@ function TagManager() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         {tags.map((tag) => (
           <div
             key={tag.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
+            className="flex items-center justify-between gap-3 rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
           >
             <div className="min-w-0">
               <TagBadge
                 tag={tag}
-                className={`text-sm ${tag.is_archived ? "text-[var(--text-muted)]" : "text-[var(--text-primary)]"}`}
+                className={`text-xs ${tag.is_archived ? "text-[var(--text-muted)]" : "text-[var(--text-primary)]"}`}
               />
               {tag.is_archived && (
-                <p className="mt-1 text-xs text-[var(--text-muted)]">Archived</p>
+                <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Archived</p>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => {
                   setEditingId(tag.id);
                   setName(tag.name);
                   setColor(tag.color);
                 }}
-                className="px-2.5 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
+                className="px-2 py-1 rounded text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
               >
                 Edit
               </button>
               {tag.is_archived ? (
                 <button
                   onClick={() => unarchive(tag.id)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs text-[var(--brand)] hover:bg-[var(--brand)]/10 transition-colors"
+                  className="px-2 py-1 rounded text-xs text-[var(--brand)] hover:bg-[var(--brand)]/10 transition-colors"
                 >
                   Restore
                 </button>
               ) : (
                 <button
                   onClick={() => archive(tag.id)}
-                  className="px-2.5 py-1.5 rounded-lg text-xs text-[var(--warning)] hover:bg-[var(--warning)]/10 transition-colors"
+                  className="px-2 py-1 rounded text-xs text-[var(--warning)] hover:bg-[var(--warning)]/10 transition-colors"
                 >
                   Archive
                 </button>
@@ -214,23 +214,23 @@ export function SettingsView() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      <nav className="w-44 flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface-1)] px-2 py-4 space-y-0.5">
+      <nav className="w-40 flex-shrink-0 border-r border-[var(--border)] bg-[var(--surface-1)] px-2 py-3 space-y-px">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
           const active = activeSection === id;
           return (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
-              className={`relative w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors ${
+              className={`relative w-full flex items-center gap-2.5 px-3 py-1.5 rounded text-[13px] font-medium text-left transition-colors ${
                 active
-                  ? "bg-[var(--brand-muted)] text-[var(--brand)]"
+                  ? "bg-[var(--surface-3)] text-[var(--text-primary)]"
                   : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
               }`}
             >
               {active && (
-                <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-[var(--brand)]" />
+                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-sm bg-[var(--brand)]" />
               )}
-              <Icon size={15} strokeWidth={active ? 2 : 1.75} />
+              <Icon size={13} strokeWidth={active ? 2 : 1.75} />
               {label}
             </button>
           );
@@ -238,10 +238,10 @@ export function SettingsView() {
       </nav>
 
       <div className="flex-1 overflow-auto">
-        <div className="px-6 py-5 max-w-lg">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--border)]">
-            <ActiveIcon size={16} className="text-[var(--text-muted)]" strokeWidth={1.75} />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+        <div className="px-5 py-4 max-w-lg">
+          <div className="flex items-center gap-2 mb-4 pb-2.5 border-b border-[var(--border)]">
+            <ActiveIcon size={14} className="text-[var(--text-muted)]" strokeWidth={1.75} />
+            <h2 className="text-[13px] font-semibold text-[var(--text-primary)]">
               {NAV_ITEMS.find((item) => item.id === activeSection)?.label}
             </h2>
           </div>
@@ -260,7 +260,7 @@ export function SettingsView() {
                 <select
                   value={settings.currency}
                   onChange={(event) => handleUpdate("currency", event.target.value)}
-                  className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+                  className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
                 >
                   <option value="USD">USD — US Dollar</option>
                   <option value="EUR">EUR — Euro</option>
@@ -274,7 +274,7 @@ export function SettingsView() {
                   value={settings.invoice_notes}
                   onChange={(event) => handleUpdate("invoice_notes", event.target.value)}
                   rows={3}
-                  className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] resize-none focus:border-[var(--brand)] focus:outline-none"
+                  className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-1.5 text-sm text-[var(--text-primary)] resize-none focus:border-[var(--brand)] focus:outline-none"
                 />
               </Field>
             </div>
@@ -316,7 +316,7 @@ export function SettingsView() {
                     handleUpdate("theme", event.target.value);
                     document.documentElement.classList.toggle("light", event.target.value === "light");
                   }}
-                  className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+                  className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
                 >
                   <option value="dark">Dark</option>
                   <option value="light">Light</option>
@@ -339,7 +339,7 @@ export function SettingsView() {
                   </span>
                   <button
                     onClick={handlePickCsvPath}
-                    className="px-3 py-1.5 rounded-lg text-xs bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors flex-shrink-0"
+                    className="px-3 py-1.5 rounded text-xs bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors flex-shrink-0"
                   >
                     Browse…
                   </button>
@@ -349,7 +349,7 @@ export function SettingsView() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleExportNow}
-                    className="px-3 py-1.5 rounded-lg text-sm bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
+                    className="px-3 py-1.5 rounded text-sm bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
                   >
                     Export CSV
                   </button>

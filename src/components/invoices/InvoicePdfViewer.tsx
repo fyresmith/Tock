@@ -208,76 +208,71 @@ export function InvoicePdfViewer({ blob }: InvoicePdfViewerProps) {
   const canGoForward = pageNumber < pageCount;
 
   return (
-    <div className="flex h-full min-h-[420px] flex-col overflow-hidden rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface-2)] xl:min-h-0">
-      <div className="flex flex-col gap-3 border-b border-[var(--border)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm font-medium text-[var(--text-primary)]">PDF Preview</p>
-          <p className="text-xs text-[var(--text-muted)]">
-            Full-page preview with zoom controls.
-          </p>
-        </div>
+    <div className="flex h-full min-h-[420px] flex-col overflow-hidden rounded border border-[var(--border)] bg-[var(--surface-2)] xl:min-h-0">
+      <div className="flex flex-col gap-2 border-b border-[var(--border)] px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+        <p className="text-xs font-medium text-[var(--text-primary)]">PDF Preview</p>
 
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-1)] p-1">
+        <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+          <div className="flex items-center gap-px rounded border border-[var(--border)] bg-[var(--surface-1)] p-0.5">
             <button
               onClick={() => setZoomMode("fit-page")}
-              className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-sm px-2 py-1 text-xs transition-colors ${
                 zoomMode === "fit-page"
-                  ? "bg-[var(--brand)] text-white"
-                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
+                  ? "bg-[var(--surface-3)] text-[var(--text-primary)]"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
               }`}
             >
-              <Expand size={12} className="inline mr-1" />
+              <Expand size={11} className="inline mr-1" />
               Fit Page
             </button>
             <button
               onClick={() => setZoomMode("fit-width")}
-              className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-sm px-2 py-1 text-xs transition-colors ${
                 zoomMode === "fit-width"
-                  ? "bg-[var(--brand)] text-white"
-                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
+                  ? "bg-[var(--surface-3)] text-[var(--text-primary)]"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]"
               }`}
             >
-              <ScanLine size={12} className="inline mr-1" />
+              <ScanLine size={11} className="inline mr-1" />
               Fit Width
             </button>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-1)] p-1">
+          <div className="flex items-center gap-px rounded border border-[var(--border)] bg-[var(--surface-1)] p-0.5">
             <button
               onClick={() => handleZoom(-0.1)}
-              className="rounded-full p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
+              className="rounded-sm p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
             >
-              <Minus size={14} />
+              <Minus size={12} />
             </button>
-            <span className="min-w-[4.25rem] text-center text-xs font-medium text-[var(--text-primary)]">
+            <span className="min-w-[3.5rem] text-center text-xs font-medium text-[var(--text-primary)]">
               {Math.round(currentScale * 100)}%
             </span>
             <button
               onClick={() => handleZoom(0.1)}
-              className="rounded-full p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
+              className="rounded-sm p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
             >
-              <Plus size={14} />
+              <Plus size={12} />
             </button>
           </div>
 
-          <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-1)] p-1">
+          <div className="flex items-center gap-px rounded border border-[var(--border)] bg-[var(--surface-1)] p-0.5">
             <button
               onClick={() => setPageNumber((value) => Math.max(1, value - 1))}
               disabled={!canGoBack}
-              className="rounded-full p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-3)] disabled:opacity-40"
+              className="rounded-sm p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-3)] disabled:opacity-40"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={12} />
             </button>
-            <span className="min-w-[4.5rem] text-center text-xs font-medium text-[var(--text-primary)]">
+            <span className="min-w-[3.75rem] text-center text-xs font-medium text-[var(--text-primary)]">
               {pageCount === 0 ? "0 / 0" : `${pageNumber} / ${pageCount}`}
             </span>
             <button
               onClick={() => setPageNumber((value) => Math.min(pageCount, value + 1))}
               disabled={!canGoForward}
-              className="rounded-full p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-3)] disabled:opacity-40"
+              className="rounded-sm p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-3)] disabled:opacity-40"
             >
-              <ChevronRight size={14} />
+              <ChevronRight size={12} />
             </button>
           </div>
         </div>
@@ -285,25 +280,25 @@ export function InvoicePdfViewer({ blob }: InvoicePdfViewerProps) {
 
       <div
         ref={viewportRef}
-        className="min-h-0 flex-1 overflow-auto bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.09),_transparent_45%),linear-gradient(180deg,#202031_0%,#161621_100%)] p-3 sm:p-4"
+        className="min-h-0 flex-1 overflow-auto bg-[var(--surface-0)] p-4"
       >
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
+          <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">
             Rendering preview…
           </div>
         ) : error ? (
-          <div className="flex h-full items-center justify-center text-sm text-[var(--danger)]">
+          <div className="flex h-full items-center justify-center text-xs text-[var(--danger)]">
             {error}
           </div>
         ) : !blob ? (
-          <div className="flex h-full items-center justify-center text-sm text-[var(--text-muted)]">
+          <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">
             No preview available.
           </div>
         ) : (
           <div className="flex min-h-full items-center justify-center">
             <canvas
               ref={canvasRef}
-              className="max-w-none rounded-md bg-white shadow-[0_24px_80px_rgba(0,0,0,0.32)]"
+              className="max-w-none bg-white shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
             />
           </div>
         )}

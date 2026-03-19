@@ -240,30 +240,26 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-5">
-      <div className={`w-full overflow-hidden rounded-[1.75rem] border border-[var(--border-strong)] bg-[var(--surface-1)] shadow-2xl animate-slide-up flex flex-col ${modalShellClass}`}>
-        <div className="border-b border-[var(--border)] px-6 py-5">
+      <div className={`w-full overflow-hidden rounded border border-[var(--border-strong)] bg-[var(--surface-1)] shadow-2xl animate-slide-up flex flex-col ${modalShellClass}`}>
+        <div className="border-b border-[var(--border)] px-5 py-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--text-secondary)]">
-                  <Receipt size={12} />
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                  <Receipt size={11} />
                   Invoice Builder
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {ALL_STEPS.map((item, index) => (
-                    <div key={item} className="flex items-center gap-2">
-                      <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                          index <= stepIndex
-                            ? "bg-[var(--brand)] text-white"
-                            : "bg-[var(--surface-2)] text-[var(--text-muted)]"
-                        }`}
-                      >
-                        {index + 1}
-                      </div>
-                      <span className={`hidden text-xs font-medium md:block ${
+                    <div key={item} className="flex items-center gap-1.5">
+                      {index > 0 && (
+                        <span className="text-[var(--border-strong)] text-xs">›</span>
+                      )}
+                      <span className={`text-xs font-medium transition-colors ${
                         index === stepIndex
                           ? "text-[var(--text-primary)]"
+                          : index < stepIndex
+                          ? "text-[var(--brand)]"
                           : "text-[var(--text-muted)]"
                       }`}>
                         {STEP_LABELS[index]}
@@ -274,10 +270,10 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
               </div>
 
               <div>
-                <h2 className="text-xl font-semibold text-[var(--text-primary)]">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">
                   {STEP_TITLES[step]}
                 </h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                   {STEP_DESCRIPTIONS[step]}
                 </p>
               </div>
@@ -285,7 +281,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
 
             <button
               onClick={onClose}
-              className="rounded-xl p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
+              className="rounded p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
             >
               <X size={18} />
             </button>
@@ -302,23 +298,19 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                     <button
                       key={value}
                       onClick={() => setFormat(value)}
-                      className={`rounded-2xl border p-4 text-left transition-all ${
+                      className={`rounded border p-3 text-left transition-all ${
                         selected
-                          ? "border-[var(--brand)] bg-[var(--brand-muted)] shadow-[0_0_0_1px_var(--brand-muted-border)]"
+                          ? "border-[var(--brand)] bg-[var(--brand-muted)]"
                           : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]"
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 rounded-xl p-2 ${
-                          selected ? "bg-white/12 text-white" : "bg-[var(--surface-1)] text-[var(--text-muted)]"
-                        }`}>
-                          <Icon size={18} />
-                        </div>
+                      <div className="flex items-start gap-2.5">
+                        <Icon size={14} className={`mt-0.5 flex-shrink-0 ${selected ? "text-[var(--brand)]" : "text-[var(--text-muted)]"}`} />
                         <div>
-                          <div className={`text-sm font-semibold ${selected ? "text-[var(--text-primary)]" : "text-[var(--text-primary)]"}`}>
+                          <div className="text-xs font-semibold text-[var(--text-primary)]">
                             {label}
                           </div>
-                          <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                          <p className="mt-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
                             {description}
                           </p>
                         </div>
@@ -331,9 +323,9 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
           )}
 
           {step === "period" && (
-            <div className="mx-auto max-w-2xl space-y-5">
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
-                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">
+            <div className="mx-auto max-w-2xl space-y-3">
+              <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">
                   Invoice Name
                 </label>
                 <input
@@ -341,20 +333,20 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                   value={invoiceName}
                   onChange={(event) => setInvoiceName(event.target.value)}
                   placeholder="e.g. March Services"
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+                  className="w-full rounded border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
                 />
-                <p className="mt-2 text-xs text-[var(--text-muted)]">
+                <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
                   Leave blank to use the generated invoice number.
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">
                       Billing Period
                     </p>
-                    <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                       {formatDate(periodStart)} – {formatDate(periodEnd)}
                     </p>
                   </div>
@@ -375,17 +367,17 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
 
           {step === "select" && previewData && (
             <div className="flex flex-col gap-4 xl:grid xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.25fr)_340px]">
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden flex flex-col xl:min-h-0">
-                <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+              <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden flex flex-col xl:min-h-0">
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
                   <div>
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Eligible Entries</p>
-                    <p className="text-xs text-[var(--text-muted)]">
+                    <p className="text-xs font-semibold text-[var(--text-primary)]">Eligible Entries</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">
                       {selectedCount} of {previewEntries.length} selected
                     </p>
                   </div>
                   <button
                     onClick={toggleAllSelected}
-                    className="rounded-full border border-[var(--border)] bg-[var(--surface-1)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]"
+                    className="rounded border border-[var(--border)] bg-[var(--surface-1)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]"
                   >
                     {allSelected ? "Clear all" : "Select all"}
                   </button>
@@ -442,10 +434,10 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                 </div>
               </div>
 
-              <div className="space-y-4 xl:min-h-0 xl:overflow-auto">
-                <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-2)] p-5">
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">Invoice Summary</p>
-                  <div className="mt-4 space-y-2 text-sm">
+              <div className="space-y-3 xl:min-h-0 xl:overflow-auto">
+                <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                  <p className="text-xs font-semibold text-[var(--text-primary)]">Invoice Summary</p>
+                  <div className="mt-3 space-y-2 text-xs">
                     <div className="flex justify-between text-[var(--text-secondary)]">
                       <span>Selected entries</span>
                       <span className="tabular-nums text-[var(--text-primary)]">{selectedCount}</span>
@@ -458,25 +450,25 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                       <span>Rate</span>
                       <span className="text-[var(--text-primary)]">{formatCurrency(hourlyRate, currency)}/hr</span>
                     </div>
-                    <div className="flex justify-between border-t border-[var(--border)] pt-3 font-semibold text-[var(--text-primary)]">
+                    <div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--text-primary)]">
                       <span>Total</span>
                       <span className="tabular-nums">{formatCurrency(totalAmount, currency)}</span>
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl bg-[var(--surface-1)] p-4 text-xs text-[var(--text-secondary)]">
+                  <div className="mt-3 rounded bg-[var(--surface-1)] p-3 text-xs text-[var(--text-secondary)]">
                     <p className="font-medium text-[var(--text-primary)]">
                       {trimmedInvoiceName || previewData.invoice_number || "Draft invoice"}
                     </p>
-                    <p className="mt-1">
+                    <p className="mt-0.5">
                       {formatDate(previewData.period_start)} – {formatDate(previewData.period_end)}
                     </p>
                   </div>
                 </div>
 
                 {format === "weekly" && (
-                  <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-2)] p-5">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Weekly Notes</p>
+                  <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                    <p className="text-xs font-semibold text-[var(--text-primary)]">Weekly Notes</p>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">
                       These notes will appear alongside each weekly summary in the PDF.
                     </p>
@@ -496,7 +488,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                               }))
                             }
                             placeholder="Add a brief summary for this week…"
-                            className="w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
+                            className="w-full resize-none rounded border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none"
                           />
                         </div>
                       ))}
@@ -515,21 +507,17 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                 <InvoicePdfViewer blob={previewBlob} />
               </div>
 
-              <div className="space-y-4 xl:min-h-0 xl:overflow-auto">
-                <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-2)] p-5">
+              <div className="space-y-3 xl:min-h-0 xl:overflow-auto">
+                <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
                   <div className="flex items-center gap-2">
-                    <div className="rounded-xl bg-[var(--surface-1)] p-2 text-[var(--brand)]">
-                      <Eye size={18} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">Ready to confirm</p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        Go back if you need to change the included entries or weekly notes.
-                      </p>
-                    </div>
+                    <Eye size={14} className="text-[var(--brand)] flex-shrink-0" />
+                    <p className="text-xs font-semibold text-[var(--text-primary)]">Ready to confirm</p>
                   </div>
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                    Go back if you need to change the included entries or weekly notes.
+                  </p>
 
-                  <div className="mt-5 space-y-2 text-sm">
+                  <div className="mt-3 space-y-2 text-xs">
                     <div className="flex justify-between text-[var(--text-secondary)]">
                       <span>Entries included</span>
                       <span className="tabular-nums text-[var(--text-primary)]">{selectedCount}</span>
@@ -542,31 +530,31 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                       <span>Rate</span>
                       <span className="text-[var(--text-primary)]">{formatCurrency(hourlyRate, currency)}/hr</span>
                     </div>
-                    <div className="flex justify-between border-t border-[var(--border)] pt-3 font-semibold text-[var(--text-primary)]">
+                    <div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold text-[var(--text-primary)]">
                       <span>Total due</span>
                       <span className="tabular-nums">{formatCurrency(totalAmount, currency)}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-2)] p-5">
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">Document Details</p>
-                  <div className="mt-4 space-y-3 text-sm text-[var(--text-secondary)]">
+                <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                  <p className="text-xs font-semibold text-[var(--text-primary)]">Document Details</p>
+                  <div className="mt-3 space-y-2.5 text-xs text-[var(--text-secondary)]">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">Name</p>
-                      <p className="mt-1 text-[var(--text-primary)]">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Name</p>
+                      <p className="mt-0.5 text-[var(--text-primary)]">
                         {trimmedInvoiceName || "Auto-generated invoice number"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">Period</p>
-                      <p className="mt-1 text-[var(--text-primary)]">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Period</p>
+                      <p className="mt-0.5 text-[var(--text-primary)]">
                         {formatDate(previewDocument.period_start)} – {formatDate(previewDocument.period_end)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">Format</p>
-                      <p className="mt-1 capitalize text-[var(--text-primary)]">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Format</p>
+                      <p className="mt-0.5 capitalize text-[var(--text-primary)]">
                         {format.replace("-", " ")}
                       </p>
                     </div>
@@ -584,13 +572,13 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
             <>
               <button
                 onClick={onClose}
-                className="w-full rounded-xl px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
+                className="w-full rounded px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
               >
                 Cancel
               </button>
               <button
                 onClick={() => setStep("period")}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] sm:w-auto"
+                className="flex w-full items-center justify-center gap-1.5 rounded bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] sm:w-auto"
               >
                 Next
                 <ChevronRight size={15} />
@@ -605,7 +593,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                   setError("");
                   setStep("format");
                 }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
+                className="flex w-full items-center justify-center gap-1.5 rounded px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
               >
                 <ChevronLeft size={15} />
                 Back
@@ -613,7 +601,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
               <button
                 onClick={handlePeriodNext}
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] disabled:opacity-50 sm:w-auto"
+                className="flex w-full items-center justify-center gap-1.5 rounded bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] disabled:opacity-50 sm:w-auto"
               >
                 {loading ? "Loading…" : "Load Entries"}
                 {!loading && <ChevronRight size={15} />}
@@ -628,7 +616,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                   setError("");
                   setStep("period");
                 }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
+                className="flex w-full items-center justify-center gap-1.5 rounded px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
               >
                 <ChevronLeft size={15} />
                 Back
@@ -636,7 +624,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
               <button
                 onClick={() => setStep("preview")}
                 disabled={selectedCount === 0}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] disabled:opacity-50 sm:w-auto"
+                className="flex w-full items-center justify-center gap-1.5 rounded bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] disabled:opacity-50 sm:w-auto"
               >
                 Preview PDF
                 <ChevronRight size={15} />
@@ -651,7 +639,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
                   setError("");
                   setStep("select");
                 }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
+                className="flex w-full items-center justify-center gap-1.5 rounded px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
               >
                 <ChevronLeft size={15} />
                 Back to Selection
@@ -659,7 +647,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
               <button
                 onClick={handleConfirm}
                 disabled={loading || selectedCount === 0}
-                className="w-full rounded-xl bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] disabled:opacity-50 sm:w-auto"
+                className="w-full rounded bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] disabled:opacity-50 sm:w-auto"
               >
                 {loading ? "Saving…" : "Confirm Invoice"}
               </button>

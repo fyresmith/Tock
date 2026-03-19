@@ -3,30 +3,27 @@
 /* ─── Design tokens ─────────────────────────────────────────────── */
 :root {
   /* Dark theme (default) */
-  --bg:        #0c0c14;
-  --surface-0: #0c0c14;
-  --surface-1: #131320;
-  --surface-2: #1c1c2e;
-  --surface-3: #252540;
+  --bg:        #09090f;
+  --surface-0: #09090f;
+  --surface-1: #0f0f1c;
+  --surface-2: #161625;
+  --surface-3: #1e1e30;
 
   --brand:              #7c6fec;
   --brand-hover:        #6a5ed4;
-  --brand-muted:        rgba(124,111,236,0.15);
-  --brand-muted-border: rgba(124,111,236,0.35);
+  --brand-muted:        rgba(124,111,236,0.12);
+  --brand-muted-border: rgba(124,111,236,0.28);
 
-  --text-primary:   #ededf5;
-  --text-secondary: #9a9ab0;
-  --text-muted:     #5c5c78;
+  --text-primary:   #e8e8f2;
+  --text-secondary: #8a8aa8;
+  --text-muted:     #525268;
 
-  --border:        rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.14);
+  --border:        rgba(255,255,255,0.11);
+  --border-strong: rgba(255,255,255,0.20);
 
   --danger:  #f87171;
   --success: #4ade80;
   --warning: #fbbf24;
-
-  --timer-glow:    rgba(124,111,236,0.28);
-  --timer-glow-lg: rgba(124,111,236,0.12);
 
   --type-work:    #818cf8;
   --type-meeting: #c084fc;
@@ -34,30 +31,27 @@
 }
 
 .light {
-  --bg:        #f5f5f8;
-  --surface-0: #f5f5f8;
-  --surface-1: #ffffff;
-  --surface-2: #f0f0f5;
-  --surface-3: #e4e4ed;
+  --bg:        #ebebf0;
+  --surface-0: #ebebf0;
+  --surface-1: #f7f7fb;
+  --surface-2: #e4e4ec;
+  --surface-3: #d8d8e4;
 
   --brand:              #5b50cc;
   --brand-hover:        #4a40b5;
   --brand-muted:        rgba(91,80,204,0.10);
-  --brand-muted-border: rgba(91,80,204,0.30);
+  --brand-muted-border: rgba(91,80,204,0.28);
 
-  --text-primary:   #1a1a2e;
-  --text-secondary: #4a4a6a;
-  --text-muted:     #8888a8;
+  --text-primary:   #18182c;
+  --text-secondary: #44446a;
+  --text-muted:     #7878a0;
 
-  --border:        rgba(0,0,0,0.08);
-  --border-strong: rgba(0,0,0,0.14);
+  --border:        rgba(0,0,0,0.12);
+  --border-strong: rgba(0,0,0,0.22);
 
   --danger:  #ef4444;
   --success: #16a34a;
   --warning: #d97706;
-
-  --timer-glow:    rgba(91,80,204,0.20);
-  --timer-glow-lg: rgba(91,80,204,0.08);
 
   --type-work:    #4f46e5;
   --type-meeting: #9333ea;
@@ -80,8 +74,8 @@
   }
 
   body {
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
-    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
     background-color: var(--surface-0);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
@@ -91,8 +85,8 @@
 
 /* ─── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -114,11 +108,6 @@
   50% { opacity: 0.3; }
 }
 
-@keyframes timer-tick {
-  from { opacity: 0.85; }
-  to { opacity: 1; }
-}
-
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -129,21 +118,12 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.08); }
-}
-
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
 }
 
 .animate-slide-up {
   animation: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.animate-glow-pulse {
-  animation: glow-pulse 2.5s ease-in-out infinite;
 }
 
 /* ─── Utilities ─────────────────────────────────────────────────── */

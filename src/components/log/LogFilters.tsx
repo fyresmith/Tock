@@ -50,7 +50,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
       <div className="relative" ref={pickerRef}>
         <button
           onClick={() => setShowPicker((v) => !v)}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs transition-all ${
             hasDateRange || showPicker
               ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
               : "bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
@@ -73,7 +73,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
         </button>
 
         {showPicker && (
-          <div className="absolute left-0 top-full mt-1.5 z-50 bg-[var(--surface-1)] border border-[var(--border-strong)] rounded-xl shadow-xl p-4 w-72">
+          <div className="absolute left-0 top-full mt-1.5 z-50 bg-[var(--surface-1)] border border-[var(--border-strong)] rounded shadow-xl p-4 w-72">
             <DateRangePicker
               startDate={filters.date_from ?? ""}
               endDate={filters.date_to ?? ""}
@@ -114,7 +114,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
           value={filters.search ?? ""}
           onChange={(e) => update("search", e.target.value || undefined)}
           placeholder="Search…"
-          className="bg-[var(--surface-2)] border border-[var(--border)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none w-36"
+          className="bg-[var(--surface-2)] border border-[var(--border)] rounded pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none w-36"
         />
       </div>
 
@@ -126,7 +126,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
             <button
               key={tag?.id ?? "all"}
               onClick={() => update("tag_id", tag?.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border transition-all ${
                 active
                   ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
@@ -149,7 +149,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
             <button
               key={key}
               onClick={() => update("invoiced", key === "all" ? undefined : false)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+              className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
                 active
                   ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
                   : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"

@@ -90,7 +90,7 @@ export function MonthView({
               <button
                 key={dateStr}
                 onClick={() => onSelectDay(isSelected ? null : dateStr)}
-                className={`relative min-h-[76px] rounded-lg p-2 text-left transition-all border ${
+                className={`relative min-h-[76px] rounded p-2 text-left transition-all border ${
                   isSelected
                     ? "bg-[var(--brand-muted)] border-[var(--brand-muted-border)]"
                     : hasEntries

@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CreateEntryArgs } from "../../lib/commands";
 import { useTags } from "../../hooks/useTags";
 import { today } from "../../lib/dateUtils";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
+import { DatePicker } from "../ui/DatePicker";
+import { TimePicker, TimePickerHandle } from "../ui/TimePicker";
 import { X, AlertCircle } from "lucide-react";
 
 interface EntryFormProps {
@@ -12,6 +14,7 @@ interface EntryFormProps {
 
 export function EntryForm({ onAdd, onClose }: EntryFormProps) {
   const { tags } = useTags();
+  const endTimeRef = useRef<TimePickerHandle>(null);
   const [form, setForm] = useState<CreateEntryArgs>({
     date: today(),
     start_time: "",
@@ -21,12 +24,7 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const firstRef = useRef<HTMLInputElement>(null);
   const selectableTags = getSelectableTags(tags);
-
-  useEffect(() => {
-    firstRef.current?.focus();
-  }, []);
 
   useEffect(() => {
     if (form.tag_id || selectableTags.length === 0) return;
@@ -65,17 +63,17 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-[var(--surface-1)] border border-[var(--border-strong)] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-slide-up">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-strong)] rounded w-full max-w-md p-6 shadow-2xl animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-[var(--text-primary)]">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
             Add Manual Entry
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </div>
 
@@ -84,13 +82,9 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
             <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
               Date
             </label>
-            <input
-              ref={firstRef}
-              type="date"
+            <DatePicker
               value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-              required
+              onChange={(date) => setForm({ ...form, date })}
             />
           </div>
 
@@ -99,24 +93,20 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 Start time
               </label>
-              <input
-                type="time"
+              <TimePicker
                 value={form.start_time}
-                onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-                required
+                onChange={(t) => setForm({ ...form, start_time: t })}
+                onComplete={() => endTimeRef.current?.focus()}
               />
             </div>
             <div className="flex-1">
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 End time
               </label>
-              <input
-                type="time"
+              <TimePicker
+                ref={endTimeRef}
                 value={form.end_time}
-                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-                required
+                onChange={(t) => setForm({ ...form, end_time: t })}
               />
             </div>
           </div>
@@ -130,7 +120,7 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="What did you work on?"
               rows={2}
-              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus:border-[var(--brand)] focus:outline-none"
+              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus:border-[var(--brand)] focus:outline-none"
             />
           </div>
 
@@ -142,7 +132,7 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               tags={selectableTags}
               value={form.tag_id}
               onChange={(tag_id) => setForm({ ...form, tag_id })}
-              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
             />
           </div>
 
@@ -157,14 +147,14 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 rounded-lg text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
+              className="flex-1 py-2 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2 rounded-lg bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium disabled:opacity-50 transition-colors"
+              className="flex-1 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium disabled:opacity-50 transition-colors"
             >
               {saving ? "Adding…" : "Add Entry"}
             </button>

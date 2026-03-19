@@ -33,29 +33,19 @@ function StatCard({
   const durationStr = `${h}h ${m.toString().padStart(2, "0")}m`;
 
   return (
-    <div className="relative bg-[var(--surface-1)] border border-[var(--border)] rounded-xl p-4 border-l-2 overflow-hidden" style={{ borderLeftColor: "var(--brand)" }}>
-      {/* Gradient overlay */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: "linear-gradient(135deg, var(--brand-muted) 0%, transparent 60%)",
-        }}
-      />
-      {/* Icon top-right */}
+    <div className="relative bg-[var(--surface-1)] border border-[var(--border)] rounded p-3 border-l-2" style={{ borderLeftColor: "var(--brand)" }}>
       <Icon
-        size={18}
-        className="absolute top-4 right-4 text-[var(--text-muted)]"
-        strokeWidth={1.5}
+        size={14}
+        className="absolute top-3 right-3 text-[var(--text-muted)]"
+        strokeWidth={1.75}
       />
-      <div className="relative">
-        <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-2">
-          {label}
-        </p>
-        <p className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{durationStr}</p>
-        <p className="text-sm text-[var(--brand)] mt-1 font-medium tabular-nums">
-          {formatCurrency(earnings, currency)}
-        </p>
-      </div>
+      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+        {label}
+      </p>
+      <p className="text-xl font-bold text-[var(--text-primary)] tabular-nums">{durationStr}</p>
+      <p className="text-xs text-[var(--brand)] mt-0.5 font-medium tabular-nums">
+        {formatCurrency(earnings, currency)}
+      </p>
     </div>
   );
 }
@@ -86,18 +76,18 @@ export function DashboardView() {
   const tooltipStyle = {
     background: "var(--surface-2)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 10,
-    fontSize: 12,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+    borderRadius: 4,
+    fontSize: 11,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
   };
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="px-6 py-5 max-w-5xl mx-auto space-y-6">
-        <h1 className="text-base font-semibold text-[var(--text-primary)]">Dashboard</h1>
+      <div className="px-5 py-4 max-w-5xl mx-auto space-y-4">
+        <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Dashboard</h1>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <StatCard label="This week"    hours={data.week_hours}       earnings={data.week_earnings}       currency={currency} icon={Clock} />
           <StatCard label="This month"   hours={data.month_hours}      earnings={data.month_earnings}      currency={currency} icon={Calendar} />
           <StatCard label="Last month"   hours={data.last_month_hours} earnings={data.last_month_earnings} currency={currency} icon={TrendingUp} />
@@ -105,16 +95,16 @@ export function DashboardView() {
         </div>
 
         {/* Daily bars */}
-        <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded-xl p-5">
-          <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-4">
+        <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-4">
+          <h2 className="text-xs font-medium text-[var(--text-secondary)] mb-3">
             Daily hours — this month
           </h2>
           {data.daily_bars.length === 0 ? (
-            <p className="text-center text-[var(--text-muted)] text-sm py-8">No data yet</p>
+            <p className="text-center text-[var(--text-muted)] text-xs py-6">No data yet</p>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={data.daily_bars} barSize={18}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={data.daily_bars} barSize={14}>
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: "var(--text-muted)" }}
@@ -132,24 +122,24 @@ export function DashboardView() {
                   contentStyle={tooltipStyle}
                   formatter={(v: unknown) => [`${(v as number).toFixed(2)}h`, "Hours"]}
                 />
-                <Bar dataKey="hours" fill={chartColor} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="hours" fill={chartColor} radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           {/* Weekly trend */}
-          <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded-xl p-5">
-            <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-4">
+            <h2 className="text-xs font-medium text-[var(--text-secondary)] mb-3">
               Weekly trend (12 weeks)
             </h2>
             {data.weekly_trend.length === 0 ? (
-              <p className="text-center text-[var(--text-muted)] text-sm py-8">No data yet</p>
+              <p className="text-center text-[var(--text-muted)] text-xs py-6">No data yet</p>
             ) : (
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={140}>
                 <LineChart data={data.weekly_trend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
                   <XAxis
                     dataKey="week"
                     tick={{ fontSize: 9, fill: "var(--text-muted)" }}
@@ -170,8 +160,8 @@ export function DashboardView() {
                     type="monotone"
                     dataKey="hours"
                     stroke={chartColor}
-                    strokeWidth={2}
-                    dot={{ fill: chartColor, r: 3 }}
+                    strokeWidth={1.5}
+                    dot={{ fill: chartColor, r: 2.5 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -179,16 +169,16 @@ export function DashboardView() {
           </div>
 
           {/* Monthly bars */}
-          <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded-xl p-5">
-            <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-4">
+            <h2 className="text-xs font-medium text-[var(--text-secondary)] mb-3">
               Monthly hours (12 months)
             </h2>
             {data.monthly_bars.length === 0 ? (
-              <p className="text-center text-[var(--text-muted)] text-sm py-8">No data yet</p>
+              <p className="text-center text-[var(--text-muted)] text-xs py-6">No data yet</p>
             ) : (
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={data.monthly_bars} barSize={20}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <ResponsiveContainer width="100%" height={140}>
+                <BarChart data={data.monthly_bars} barSize={16}>
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
                   <XAxis
                     dataKey="month"
                     tick={{ fontSize: 9, fill: "var(--text-muted)" }}
@@ -207,7 +197,7 @@ export function DashboardView() {
                     formatter={(v: unknown) => [`${(v as number).toFixed(2)}h`, "Hours"]}
                     labelFormatter={(label: unknown) => formatMonthLabel(label as string)}
                   />
-                  <Bar dataKey="hours" fill={chartColor} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="hours" fill={chartColor} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}

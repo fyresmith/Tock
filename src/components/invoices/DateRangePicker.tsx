@@ -31,8 +31,6 @@ const MONTHS = [
 ];
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-// Continuous band color for the selected range
-const RANGE_BG = "rgba(99, 102, 241, 0.13)";
 
 export function DateRangePicker({ startDate, endDate, onChange }: Props) {
   const today = new Date();
@@ -151,33 +149,32 @@ export function DateRangePicker({ startDate, endDate, onChange }: Props) {
             date > dispStart && date < dispEnd
           );
 
-          // Continuous band background using gradient trick for edge cells
-          let bandStyle: React.CSSProperties = {};
-          if (!isSingle && (isStart || isEnd || inRange)) {
-            if (isStart) {
-              bandStyle = { background: `linear-gradient(90deg, transparent 50%, ${RANGE_BG} 50%)` };
-            } else if (isEnd) {
-              bandStyle = { background: `linear-gradient(90deg, ${RANGE_BG} 50%, transparent 50%)` };
-            } else {
-              bandStyle = { background: RANGE_BG };
-            }
-          }
+          const showBand = !isSingle && (isStart || isEnd || inRange);
 
           return (
             <div
               key={date}
               className="h-8 relative"
-              style={bandStyle}
               onMouseEnter={() => picking === "end" && setHoverDate(date)}
               onMouseLeave={() => picking === "end" && setHoverDate(null)}
             >
+              {/* Range band — separate layer so it doesn't interfere with button shape */}
+              {showBand && (
+                <div
+                  className="absolute top-1 bottom-1 bg-[var(--brand-muted-border)]"
+                  style={{
+                    left: isStart ? "50%" : "0",
+                    right: isEnd ? "50%" : "0",
+                  }}
+                />
+              )}
               <button
                 onClick={() => handleDayClick(date)}
-                className={`absolute inset-0.5 flex items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                className={`absolute inset-0.5 z-10 flex items-center justify-center rounded-sm text-xs font-medium transition-colors ${
                   isStart || isEnd
                     ? "bg-[var(--brand)] text-white"
                     : inRange
-                    ? "text-[var(--text-primary)]"
+                    ? "text-[var(--text-primary)] hover:bg-[var(--brand-muted)]"
                     : "text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"
                 }`}
               >
