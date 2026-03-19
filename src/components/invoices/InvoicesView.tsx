@@ -90,6 +90,9 @@ function InvoiceDetailModal({
               </span>
             </div>
             <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+              {invoice.client_name && (
+                <span className="text-[var(--brand)] mr-1.5">{invoice.client_name} ·</span>
+              )}
               {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
             </p>
           </div>
@@ -422,6 +425,9 @@ export function InvoicesView() {
                 </div>
 
                 <p className="text-xs text-[var(--text-secondary)]">
+                  {invoice.client_name && (
+                    <span className="text-[var(--brand)] mr-1.5">{invoice.client_name} ·</span>
+                  )}
                   {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
                 </p>
 

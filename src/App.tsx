@@ -8,6 +8,7 @@ import { SettingsView } from "./components/settings/SettingsView";
 import { StopPrompt } from "./components/timer/StopPrompt";
 import { useTimerStore } from "./stores/timerStore";
 import { useSettings } from "./hooks/useSettings";
+import { useTimerSync } from "./hooks/useTimerSync";
 
 type View = "timer" | "log" | "dashboard" | "invoices" | "settings";
 
@@ -18,6 +19,7 @@ export function App() {
   const [showStop, setShowStop] = useState(false);
   const { isRunning } = useTimerStore();
   const { settings } = useSettings();
+  useTimerSync();
 
   useEffect(() => {
     if (settings?.theme === "light") {

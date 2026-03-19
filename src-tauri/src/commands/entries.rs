@@ -18,6 +18,7 @@ pub struct CreateEntryArgs {
     pub end_time: String,
     pub description: String,
     pub tag_id: String,
+    pub client_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,9 +64,9 @@ pub async fn create_entry(
     sqlx::query(
         "INSERT INTO time_entries (
             id, date, start_time, end_time, duration_minutes, description, entry_type, tag_id,
-            invoiced, invoice_id, created_at, updated_at
+            client_id, invoiced, invoice_id, created_at, updated_at
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)",
     )
     .bind(&id)
     .bind(&args.date)
@@ -75,6 +76,7 @@ pub async fn create_entry(
     .bind(&args.description)
     .bind(&tag.name)
     .bind(&tag.id)
+    .bind(&args.client_id)
     .bind(&now)
     .bind(&now)
     .execute(pool.inner())

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EntryTag, TimeEntry, UpdateEntryArgs } from "../../lib/commands";
+import { Client, EntryTag, TimeEntry, UpdateEntryArgs } from "../../lib/commands";
 import { formatDate, formatTime, minutesToHHMM } from "../../lib/dateUtils";
 import { TagBadge } from "../tags/TagBadge";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
@@ -8,11 +8,15 @@ import { Pencil, Trash2, Check } from "lucide-react";
 interface EntryRowProps {
   entry: TimeEntry;
   tags: EntryTag[];
+  clients: Client[];
   onUpdate: (args: UpdateEntryArgs) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
-export function EntryRow({ entry, tags, onUpdate, onDelete }: EntryRowProps) {
+export function EntryRow({ entry, tags, clients, onUpdate, onDelete }: EntryRowProps) {
+  const clientName = entry.client_id
+    ? (clients.find((c) => c.id === entry.client_id)?.name ?? null)
+    : null;
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     description: entry.description,
@@ -88,6 +92,9 @@ export function EntryRow({ entry, tags, onUpdate, onDelete }: EntryRowProps) {
             className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </td>
+        <td className="px-4 py-2 text-xs text-[var(--text-muted)] whitespace-nowrap">
+          {clientName ?? <span className="opacity-40">—</span>}
+        </td>
         <td className="px-4 py-2 text-xs text-[var(--text-muted)]">—</td>
         <td className="px-4 py-2">
           <div className="flex gap-1">
@@ -129,6 +136,9 @@ export function EntryRow({ entry, tags, onUpdate, onDelete }: EntryRowProps) {
       </td>
       <td className="px-4 py-2.5">
         <TagBadge tag={entry} className="text-xs text-[var(--text-secondary)]" />
+      </td>
+      <td className="px-4 py-2.5 text-xs text-[var(--text-secondary)] whitespace-nowrap">
+        {clientName ?? <span className="text-[var(--text-muted)] opacity-40">—</span>}
       </td>
       <td
         className="px-4 py-2.5 text-sm font-mono text-[var(--text-primary)]"

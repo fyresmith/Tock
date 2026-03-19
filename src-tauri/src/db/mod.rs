@@ -45,6 +45,30 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
         .execute(pool)
         .await;
 
+    // 004: Add clients table and client_id columns
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS clients (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            hourly_rate REAL NOT NULL DEFAULT 0,
+            is_default INTEGER NOT NULL DEFAULT 0,
+            is_archived INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    for stmt in [
+        "ALTER TABLE time_entries ADD COLUMN client_id TEXT",
+        "ALTER TABLE invoices ADD COLUMN client_id TEXT",
+        "ALTER TABLE invoices ADD COLUMN client_name TEXT",
+    ] {
+        let _ = sqlx::query(stmt).execute(pool).await;
+    }
+
     for stmt in [
         "ALTER TABLE time_entries ADD COLUMN tag_id TEXT",
         "ALTER TABLE invoices ADD COLUMN issued_at TEXT",

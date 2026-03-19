@@ -1,5 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export interface Client {
+  id: string;
+  name: string;
+  hourly_rate: number;
+  is_default: boolean;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TimeEntry {
   id: string;
   date: string;
@@ -13,6 +23,7 @@ export interface TimeEntry {
   tag_color: string;
   invoiced: boolean;
   invoice_id: string | null;
+  client_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +60,8 @@ export interface Invoice {
   format: InvoiceFormat;
   layout_data: string | null;
   name: string | null;
+  client_id: string | null;
+  client_name: string | null;
   is_overdue: boolean;
   is_locked: boolean;
 }
@@ -68,6 +81,8 @@ export interface InvoicePreview {
   format: InvoiceFormat;
   layout_data: string | null;
   name: string | null;
+  client_id: string | null;
+  client_name: string | null;
   issued_at: string;
   entries: TimeEntry[];
 }
@@ -113,7 +128,8 @@ export interface DashboardData {
 }
 
 // ── Timer ──────────────────────────────────────────────────────────
-export const startTimer = () => invoke<TimeEntry>("start_timer");
+export const startTimer = (clientId: string | null = null) =>
+  invoke<TimeEntry>("start_timer", { clientId });
 
 export const stopTimer = (entryId: string, description: string, tagId: string) =>
   invoke<TimeEntry>("stop_timer", { entryId, description, tagId });
@@ -123,6 +139,8 @@ export const getActiveTimer = () => invoke<TimeEntry | null>("get_active_timer")
 export const discardTimer = (entryId: string) =>
   invoke<void>("discard_timer", { entryId });
 
+export const openTimerPopup = () => invoke<void>("open_timer_popup");
+
 // ── Entries ────────────────────────────────────────────────────────
 export interface CreateEntryArgs {
   date: string;
@@ -130,6 +148,7 @@ export interface CreateEntryArgs {
   end_time: string;
   description: string;
   tag_id: string;
+  client_id?: string | null;
 }
 
 export interface UpdateEntryArgs {
@@ -167,7 +186,8 @@ export const previewInvoice = (
   periodEnd: string,
   format: InvoiceFormat = "detailed",
   layoutData: string | null = null,
-  name: string | null = null
+  name: string | null = null,
+  clientId: string | null = null
 ) =>
   invoke<InvoicePreview>("preview_invoice", {
     periodStart,
@@ -175,6 +195,7 @@ export const previewInvoice = (
     format,
     layoutData,
     name,
+    clientId,
   });
 
 export const createInvoice = (
@@ -183,7 +204,8 @@ export const createInvoice = (
   entryIds: string[],
   format: InvoiceFormat = "detailed",
   layoutData: string | null = null,
-  name: string | null = null
+  name: string | null = null,
+  clientId: string | null = null
 ) =>
   invoke<InvoiceWithEntries>("create_invoice", {
     periodStart,
@@ -192,6 +214,7 @@ export const createInvoice = (
     format,
     layoutData,
     name,
+    clientId,
   });
 
 export const listInvoices = () => invoke<Invoice[]>("list_invoices");
@@ -241,3 +264,21 @@ export const archiveTag = (id: string) =>
 
 export const unarchiveTag = (id: string) =>
   invoke<EntryTag>("unarchive_tag", { id });
+
+// ── Clients ────────────────────────────────────────────────────────
+export const listClients = () => invoke<Client[]>("list_clients");
+
+export const createClient = (name: string, hourlyRate: number) =>
+  invoke<Client>("create_client", { args: { name, hourly_rate: hourlyRate } });
+
+export const updateClient = (id: string, name: string, hourlyRate: number) =>
+  invoke<Client>("update_client", { args: { id, name, hourly_rate: hourlyRate } });
+
+export const setDefaultClient = (id: string) =>
+  invoke<Client>("set_default_client", { id });
+
+export const archiveClient = (id: string) =>
+  invoke<Client>("archive_client", { id });
+
+export const unarchiveClient = (id: string) =>
+  invoke<Client>("unarchive_client", { id });

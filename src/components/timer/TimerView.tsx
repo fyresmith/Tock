@@ -1,15 +1,26 @@
 import { useEffect, useState } from "react";
 import { useTimer } from "../../hooks/useTimer";
+import { useClients } from "../../hooks/useClients";
 import { elapsedSeconds, secondsToHHMMSS, formatTime } from "../../lib/dateUtils";
 import { StopPrompt } from "./StopPrompt";
-import { Play, Square, AlertTriangle } from "lucide-react";
+import { openTimerPopup } from "../../lib/commands";
+import { Play, Square, AlertTriangle, PictureInPicture2 } from "lucide-react";
 
 export function TimerView() {
   const { activeEntry, isRunning, start, recover } = useTimer();
+  const { activeClients, defaultClient } = useClients();
   const [elapsed, setElapsed] = useState(0);
   const [showStop, setShowStop] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [crashRecovery, setCrashRecovery] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // Track selected client — default to the default client when clients load
+  useEffect(() => {
+    if (selectedClientId === null && defaultClient) {
+      setSelectedClientId(defaultClient.id);
+    }
+  }, [defaultClient, selectedClientId]);
 
   // Crash recovery on mount
   useEffect(() => {
@@ -44,6 +55,13 @@ export function TimerView() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-7 p-8 relative overflow-hidden">
+      <button
+        onClick={() => openTimerPopup()}
+        className="absolute top-4 right-4 p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+        title="Pop out timer"
+      >
+        <PictureInPicture2 size={15} />
+      </button>
       {crashRecovery && activeEntry && (
         <div className="w-full max-w-sm rounded border border-[var(--warning)] bg-[var(--surface-2)] px-4 py-3 animate-fade-in flex gap-3 items-start">
           <AlertTriangle size={14} className="text-[var(--warning)] mt-0.5 flex-shrink-0" />
@@ -97,11 +115,41 @@ export function TimerView() {
         )}
       </div>
 
+      {/* Client selector */}
+      {activeClients.length > 0 && (
+        <div className="flex flex-col items-center gap-1.5">
+          {isRunning ? (
+            activeEntry?.client_id && (
+              <p className="text-xs text-[var(--text-muted)]">
+                Client:{" "}
+                <span className="text-[var(--text-secondary)] font-medium">
+                  {activeClients.find((c) => c.id === activeEntry.client_id)?.name ?? "—"}
+                </span>
+              </p>
+            )
+          ) : (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-[var(--text-muted)]">Client</label>
+              <select
+                value={selectedClientId ?? ""}
+                onChange={(e) => setSelectedClientId(e.target.value || null)}
+                className="bg-[var(--surface-2)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+              >
+                <option value="">No client</option>
+                {activeClients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Buttons */}
       <div className="flex flex-col items-center gap-2.5">
         {!isRunning ? (
           <button
-            onClick={start}
+            onClick={() => start(selectedClientId)}
             className="flex items-center gap-2 px-6 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-medium text-sm transition-colors"
           >
             <Play size={14} fill="currentColor" />

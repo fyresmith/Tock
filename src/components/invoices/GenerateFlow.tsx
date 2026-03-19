@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useInvoices } from "../../hooks/useInvoices";
+import { useClients } from "../../hooks/useClients";
 import {
   InvoiceFormat,
   InvoicePreview,
@@ -29,10 +30,10 @@ interface GenerateFlowProps {
   settings: Settings;
 }
 
-type Step = "format" | "period" | "select" | "preview";
+type Step = "client" | "format" | "period" | "select" | "preview";
 
-const ALL_STEPS: Step[] = ["format", "period", "select", "preview"];
-const STEP_LABELS = ["Format", "Period", "Select", "Preview"];
+const ALL_STEPS: Step[] = ["client", "format", "period", "select", "preview"];
+const STEP_LABELS = ["Client", "Format", "Period", "Select", "Preview"];
 
 const FORMAT_OPTIONS: {
   value: InvoiceFormat;
@@ -79,6 +80,7 @@ function getCalendarWeeks(start: string, end: string): { isoWeek: string; label:
 }
 
 const STEP_TITLES: Record<Step, string> = {
+  client: "Choose Client",
   format: "Choose Format",
   period: "Select Period",
   select: "Select Entries",
@@ -86,6 +88,7 @@ const STEP_TITLES: Record<Step, string> = {
 };
 
 const STEP_DESCRIPTIONS: Record<Step, string> = {
+  client: "Pick the client this invoice is for. Entries will be filtered by client, and that client's rate will be used.",
   format: "Pick the invoice layout before building the candidate entry set.",
   period: "Choose the date window for eligible, uninvoiced entries.",
   select: "Adjust the included entries and confirm the totals before generating the final PDF preview.",
@@ -94,8 +97,19 @@ const STEP_DESCRIPTIONS: Record<Step, string> = {
 
 export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowProps) {
   const { preview, create } = useInvoices();
-  const [step, setStep] = useState<Step>("format");
+  const { activeClients, defaultClient } = useClients();
+  const [step, setStep] = useState<Step>("client");
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientInitialized, setClientInitialized] = useState(false);
   const [format, setFormat] = useState<InvoiceFormat>("detailed");
+
+  // Pre-select default client once clients load
+  useEffect(() => {
+    if (!clientInitialized && defaultClient) {
+      setSelectedClientId(defaultClient.id);
+      setClientInitialized(true);
+    }
+  }, [clientInitialized, defaultClient]);
   const [invoiceName, setInvoiceName] = useState("");
   const [previewData, setPreviewData] = useState<InvoicePreview | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -164,7 +178,8 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
         periodEnd,
         format,
         layoutData,
-        trimmedInvoiceName
+        trimmedInvoiceName,
+        selectedClientId
       );
       setPreviewData(result);
       setSelectedIds(new Set(result.entries.map((entry) => entry.id)));
@@ -201,7 +216,8 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
         selectedEntries.map((entry) => entry.id),
         format,
         layoutData,
-        trimmedInvoiceName
+        trimmedInvoiceName,
+        selectedClientId
       );
       await onGenerated(result);
       onClose();
@@ -234,7 +250,7 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
       ? "max-w-[min(92vw,1120px)] h-[min(88vh,860px)]"
       : "max-w-[min(92vw,820px)]";
   const bodyClass =
-    step === "format" || step === "period"
+    step === "client" || step === "format" || step === "period"
       ? "min-h-0 flex-1 overflow-auto p-4 sm:p-6"
       : "min-h-0 flex-1 overflow-auto p-4 sm:p-6 xl:overflow-hidden";
 
@@ -289,6 +305,55 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
         </div>
 
         <div className={bodyClass}>
+          {step === "client" && (
+            <div className="mx-auto max-w-3xl space-y-3">
+              {/* No client option */}
+              <button
+                onClick={() => setSelectedClientId(null)}
+                className={`w-full rounded border p-3 text-left transition-all ${
+                  selectedClientId === null
+                    ? "border-[var(--brand)] bg-[var(--brand-muted)]"
+                    : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]"
+                }`}
+              >
+                <div className="text-xs font-semibold text-[var(--text-primary)]">All / No client</div>
+                <p className="mt-0.5 text-[11px] leading-4 text-[var(--text-secondary)]">
+                  Include all uninvoiced entries. Uses your global hourly rate.
+                </p>
+              </button>
+
+              {activeClients.length === 0 && (
+                <p className="text-xs text-[var(--text-muted)] text-center py-4">
+                  No clients yet. Add clients in Settings → Clients, or continue with no client.
+                </p>
+              )}
+
+              {activeClients.map((client) => (
+                <button
+                  key={client.id}
+                  onClick={() => setSelectedClientId(client.id)}
+                  className={`w-full rounded border p-3 text-left transition-all ${
+                    selectedClientId === client.id
+                      ? "border-[var(--brand)] bg-[var(--brand-muted)]"
+                      : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-[var(--text-primary)]">
+                      {client.name}
+                      {client.is_default && (
+                        <span className="ml-2 text-[10px] text-[var(--brand)] font-normal">default</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-[var(--text-muted)]">
+                      {formatCurrency(client.hourly_rate, settings.currency)}/hr
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
           {step === "format" && (
             <div className="mx-auto max-w-3xl space-y-5">
               <div className="grid gap-3 md:grid-cols-2">
@@ -568,13 +633,32 @@ export function GenerateFlow({ onClose, onGenerated, settings }: GenerateFlowPro
         </div>
 
         <div className="flex flex-col-reverse gap-2 border-t border-[var(--border)] px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
-          {step === "format" && (
+          {step === "client" && (
             <>
               <button
                 onClick={onClose}
                 className="w-full rounded px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
               >
                 Cancel
+              </button>
+              <button
+                onClick={() => setStep("format")}
+                className="flex w-full items-center justify-center gap-1.5 rounded bg-[var(--brand)] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--brand-hover)] sm:w-auto"
+              >
+                Next
+                <ChevronRight size={15} />
+              </button>
+            </>
+          )}
+
+          {step === "format" && (
+            <>
+              <button
+                onClick={() => { setError(""); setStep("client"); }}
+                className="flex w-full items-center justify-center gap-1.5 rounded px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-2)] sm:w-auto"
+              >
+                <ChevronLeft size={15} />
+                Back
               </button>
               <button
                 onClick={() => setStep("period")}

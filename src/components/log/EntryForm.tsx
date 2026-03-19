@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { CreateEntryArgs } from "../../lib/commands";
 import { useTags } from "../../hooks/useTags";
+import { useClients } from "../../hooks/useClients";
 import { today } from "../../lib/dateUtils";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
 import { DatePicker } from "../ui/DatePicker";
@@ -14,6 +15,7 @@ interface EntryFormProps {
 
 export function EntryForm({ onAdd, onClose }: EntryFormProps) {
   const { tags } = useTags();
+  const { activeClients, defaultClient } = useClients();
   const endTimeRef = useRef<TimePickerHandle>(null);
   const [form, setForm] = useState<CreateEntryArgs>({
     date: today(),
@@ -21,7 +23,15 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
     end_time: "",
     description: "",
     tag_id: "",
+    client_id: null,
   });
+
+  // Pre-select default client once clients load
+  useEffect(() => {
+    if (form.client_id === null && defaultClient) {
+      setForm((f) => ({ ...f, client_id: defaultClient.id }));
+    }
+  }, [defaultClient, form.client_id]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const selectableTags = getSelectableTags(tags);
@@ -123,6 +133,24 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus:border-[var(--brand)] focus:outline-none"
             />
           </div>
+
+          {activeClients.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+                Client
+              </label>
+              <select
+                value={form.client_id ?? ""}
+                onChange={(e) => setForm({ ...form, client_id: e.target.value || null })}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+              >
+                <option value="">No client</option>
+                {activeClients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">

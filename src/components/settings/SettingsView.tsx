@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { useTags } from "../../hooks/useTags";
+import { useClients } from "../../hooks/useClients";
 import { exportCsv } from "../../lib/commands";
 import { open } from "@tauri-apps/plugin-dialog";
 import { TagBadge } from "../tags/TagBadge";
 import {
+  Briefcase,
   Database,
   DollarSign,
   Palette,
@@ -160,9 +162,141 @@ function TagManager() {
   );
 }
 
-type Section = "billing" | "identity" | "appearance" | "tags" | "data";
+function ClientManager() {
+  const { clients, add, update, setDefault, archive, unarchive } = useClients();
+  const [name, setName] = useState("");
+  const [rate, setRate] = useState("75.00");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const resetForm = () => {
+    setName("");
+    setRate("75.00");
+    setEditingId(null);
+  };
+
+  const handleSubmit = async () => {
+    setError("");
+    const rateNum = parseFloat(rate);
+    if (!name.trim()) { setError("Name is required"); return; }
+    if (isNaN(rateNum) || rateNum < 0) { setError("Enter a valid rate"); return; }
+    try {
+      if (editingId) {
+        await update(editingId, name.trim(), rateNum);
+      } else {
+        await add(name.trim(), rateNum);
+      }
+      resetForm();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3 space-y-2.5">
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <TextInput value={name} onChange={setName} placeholder="Client name" />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-[var(--text-muted)]">$</span>
+            <input
+              type="number"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="75.00"
+              className="w-20 bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+            />
+            <span className="text-xs text-[var(--text-muted)]">/hr</span>
+          </div>
+        </div>
+        {error && <p className="text-xs text-[var(--danger)]">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            onClick={handleSubmit}
+            className="px-3 py-1.5 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-xs font-medium transition-colors"
+          >
+            {editingId ? "Save Client" : "Add Client"}
+          </button>
+          {editingId && (
+            <button
+              onClick={resetForm}
+              className="px-3 py-1.5 rounded text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        {clients.map((client) => (
+          <div
+            key={client.id}
+            className="flex items-center justify-between gap-3 rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-medium ${client.is_archived ? "text-[var(--text-muted)]" : "text-[var(--text-primary)]"}`}>
+                  {client.name}
+                </span>
+                {client.is_default && !client.is_archived && (
+                  <span className="text-[10px] text-[var(--brand)]">default</span>
+                )}
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                ${client.hourly_rate.toFixed(2)}/hr
+                {client.is_archived && " · Archived"}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {!client.is_archived && !client.is_default && (
+                <button
+                  onClick={() => setDefault(client.id)}
+                  className="px-2 py-1 rounded text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
+                >
+                  Set default
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setEditingId(client.id);
+                  setName(client.name);
+                  setRate(client.hourly_rate.toFixed(2));
+                }}
+                className="px-2 py-1 rounded text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-3)] transition-colors"
+              >
+                Edit
+              </button>
+              {client.is_archived ? (
+                <button
+                  onClick={() => unarchive(client.id)}
+                  className="px-2 py-1 rounded text-xs text-[var(--brand)] hover:bg-[var(--brand)]/10 transition-colors"
+                >
+                  Restore
+                </button>
+              ) : (
+                <button
+                  onClick={() => archive(client.id)}
+                  className="px-2 py-1 rounded text-xs text-[var(--warning)] hover:bg-[var(--warning)]/10 transition-colors"
+                >
+                  Archive
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {clients.length === 0 && (
+          <p className="text-xs text-[var(--text-muted)] py-2">No clients yet. Add one above.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type Section = "clients" | "billing" | "identity" | "appearance" | "tags" | "data";
 
 const NAV_ITEMS: { id: Section; label: string; icon: LucideIcon }[] = [
+  { id: "clients", label: "Clients", icon: Briefcase },
   { id: "billing", label: "Billing", icon: DollarSign },
   { id: "identity", label: "Identity", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
@@ -173,7 +307,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: LucideIcon }[] = [
 export function SettingsView() {
   const { settings, loading, update } = useSettings();
   const [csvStatus, setCsvStatus] = useState("");
-  const [activeSection, setActiveSection] = useState<Section>("billing");
+  const [activeSection, setActiveSection] = useState<Section>("clients");
 
   if (loading || !settings) {
     return (
@@ -245,6 +379,8 @@ export function SettingsView() {
               {NAV_ITEMS.find((item) => item.id === activeSection)?.label}
             </h2>
           </div>
+
+          {activeSection === "clients" && <ClientManager />}
 
           {activeSection === "billing" && (
             <div>

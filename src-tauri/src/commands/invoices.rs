@@ -4,6 +4,7 @@ use sqlx::SqlitePool;
 use std::collections::HashSet;
 use uuid::Uuid;
 
+use crate::commands::clients::resolve_hourly_rate;
 use crate::commands::timer::{TimeEntry, TIME_ENTRY_SELECT};
 
 const LIVE_ENTRY_ORDER: &str = " ORDER BY time_entries.date ASC, time_entries.start_time ASC";
@@ -28,6 +29,8 @@ pub struct Invoice {
     pub format: String,
     pub layout_data: Option<String>,
     pub name: Option<String>,
+    pub client_id: Option<String>,
+    pub client_name: Option<String>,
     pub is_overdue: bool,
     pub is_locked: bool,
 }
@@ -43,6 +46,8 @@ pub struct InvoicePreview {
     pub format: String,
     pub layout_data: Option<String>,
     pub name: Option<String>,
+    pub client_id: Option<String>,
+    pub client_name: Option<String>,
     pub issued_at: String,
     pub entries: Vec<TimeEntry>,
 }
@@ -89,6 +94,8 @@ fn invoice_select_query(where_clause: &str) -> String {
             invoices.format,
             invoices.layout_data,
             invoices.name,
+            invoices.client_id,
+            invoices.client_name,
             CASE
                 WHEN invoices.status IN ('issued', 'sent')
                  AND invoices.paid_at IS NULL
@@ -124,35 +131,47 @@ async fn fetch_invoice_by_id(pool: &SqlitePool, invoice_id: &str) -> Result<Invo
         .map_err(|e| e.to_string())
 }
 
-async fn fetch_hourly_rate(pool: &SqlitePool) -> Result<f64, String> {
-    let rate_row: (String,) = sqlx::query_as("SELECT value FROM settings WHERE key = 'hourly_rate'")
-        .fetch_one(pool)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(rate_row.0.parse().unwrap_or(75.0))
-}
-
 async fn fetch_preview_entries(
     pool: &SqlitePool,
     period_start: &str,
     period_end: &str,
+    client_id: Option<&str>,
 ) -> Result<Vec<TimeEntry>, String> {
-    sqlx::query_as(&format!(
-        "{}{}",
-        live_entry_query(
-            "WHERE time_entries.date >= ?
-               AND time_entries.date <= ?
-               AND time_entries.end_time IS NOT NULL
-               AND time_entries.invoiced = 0"
-        ),
-        LIVE_ENTRY_ORDER
-    ))
-    .bind(period_start)
-    .bind(period_end)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| e.to_string())
+    if let Some(cid) = client_id {
+        sqlx::query_as(&format!(
+            "{}{}",
+            live_entry_query(
+                "WHERE time_entries.date >= ?
+                   AND time_entries.date <= ?
+                   AND time_entries.end_time IS NOT NULL
+                   AND time_entries.invoiced = 0
+                   AND time_entries.client_id = ?"
+            ),
+            LIVE_ENTRY_ORDER
+        ))
+        .bind(period_start)
+        .bind(period_end)
+        .bind(cid)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())
+    } else {
+        sqlx::query_as(&format!(
+            "{}{}",
+            live_entry_query(
+                "WHERE time_entries.date >= ?
+                   AND time_entries.date <= ?
+                   AND time_entries.end_time IS NOT NULL
+                   AND time_entries.invoiced = 0"
+            ),
+            LIVE_ENTRY_ORDER
+        ))
+        .bind(period_start)
+        .bind(period_end)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())
+    }
 }
 
 async fn fetch_invoice_live_entries(
@@ -188,6 +207,7 @@ async fn fetch_invoice_snapshot_entries(
             tag_color,
             1 AS invoiced,
             invoice_id,
+            NULL AS client_id,
             created_at,
             created_at AS updated_at
          FROM invoice_entry_snapshots
@@ -207,15 +227,30 @@ async fn preview_invoice_internal(
     format: String,
     layout_data: Option<String>,
     name: Option<String>,
+    client_id: Option<String>,
 ) -> Result<InvoicePreview, String> {
-    let hourly_rate = fetch_hourly_rate(pool).await?;
-    let entries = fetch_preview_entries(pool, &period_start, &period_end).await?;
+    let hourly_rate = resolve_hourly_rate(pool, client_id.as_deref()).await?;
+    let entries =
+        fetch_preview_entries(pool, &period_start, &period_end, client_id.as_deref()).await?;
 
     if entries.is_empty() {
         return Err(empty_entries_error());
     }
 
     let (total_hours, total_amount) = invoice_totals(&entries, hourly_rate);
+
+    // Fetch client name for the preview if a client is specified.
+    let client_name: Option<String> = if let Some(ref cid) = client_id {
+        sqlx::query_as::<_, (String,)>("SELECT name FROM clients WHERE id = ?")
+            .bind(cid)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten()
+            .map(|(n,)| n)
+    } else {
+        None
+    };
 
     Ok(InvoicePreview {
         invoice_number: None,
@@ -227,6 +262,8 @@ async fn preview_invoice_internal(
         format,
         layout_data,
         name,
+        client_id,
+        client_name,
         issued_at: now_iso(),
         entries,
     })
@@ -240,35 +277,65 @@ async fn create_invoice_internal(
     format: String,
     layout_data: Option<String>,
     name: Option<String>,
+    client_id: Option<String>,
 ) -> Result<InvoiceWithEntries, String> {
     let selected_ids: HashSet<String> = entry_ids.into_iter().collect();
     if selected_ids.is_empty() {
         return Err("Select at least one entry before creating an invoice".into());
     }
 
-    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-    let rate_row: (String,) =
-        sqlx::query_as("SELECT value FROM settings WHERE key = 'hourly_rate'")
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-    let hourly_rate = rate_row.0.parse().unwrap_or(75.0);
+    let hourly_rate = resolve_hourly_rate(pool, client_id.as_deref()).await?;
 
-    let eligible_entries: Vec<TimeEntry> = sqlx::query_as(&format!(
-        "{}{}",
-        live_entry_query(
-            "WHERE time_entries.date >= ?
-               AND time_entries.date <= ?
-               AND time_entries.end_time IS NOT NULL
-               AND time_entries.invoiced = 0"
-        ),
-        LIVE_ENTRY_ORDER
-    ))
-    .bind(&period_start)
-    .bind(&period_end)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Snapshot the client name so the invoice stays readable after client edits.
+    let client_name: Option<String> = if let Some(ref cid) = client_id {
+        sqlx::query_as::<_, (String,)>("SELECT name FROM clients WHERE id = ?")
+            .bind(cid)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten()
+            .map(|(n,)| n)
+    } else {
+        None
+    };
+
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    let eligible_entries: Vec<TimeEntry> = if let Some(ref cid) = client_id {
+        sqlx::query_as(&format!(
+            "{}{}",
+            live_entry_query(
+                "WHERE time_entries.date >= ?
+                   AND time_entries.date <= ?
+                   AND time_entries.end_time IS NOT NULL
+                   AND time_entries.invoiced = 0
+                   AND time_entries.client_id = ?"
+            ),
+            LIVE_ENTRY_ORDER
+        ))
+        .bind(&period_start)
+        .bind(&period_end)
+        .bind(cid)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query_as(&format!(
+            "{}{}",
+            live_entry_query(
+                "WHERE time_entries.date >= ?
+                   AND time_entries.date <= ?
+                   AND time_entries.end_time IS NOT NULL
+                   AND time_entries.invoiced = 0"
+            ),
+            LIVE_ENTRY_ORDER
+        ))
+        .bind(&period_start)
+        .bind(&period_end)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?
+    };
 
     let mut entries: Vec<TimeEntry> = eligible_entries
         .into_iter()
@@ -299,9 +366,9 @@ async fn create_invoice_internal(
         "INSERT INTO invoices (
             id, invoice_number, period_start, period_end, total_hours, hourly_rate, total_amount,
             status, pdf_path, created_at, issued_at, sent_at, due_at, paid_at, locked_at,
-            format, layout_data, name
+            format, layout_data, name, client_id, client_name
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', NULL, ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&invoice_number)
@@ -314,6 +381,8 @@ async fn create_invoice_internal(
     .bind(&format)
     .bind(&layout_data)
     .bind(&name)
+    .bind(&client_id)
+    .bind(&client_name)
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;
@@ -477,6 +546,7 @@ pub async fn preview_invoice(
     format: String,
     layout_data: Option<String>,
     name: Option<String>,
+    client_id: Option<String>,
 ) -> Result<InvoicePreview, String> {
     preview_invoice_internal(
         pool.inner(),
@@ -485,6 +555,7 @@ pub async fn preview_invoice(
         format,
         layout_data,
         name,
+        client_id,
     )
     .await
 }
@@ -498,6 +569,7 @@ pub async fn create_invoice(
     format: String,
     layout_data: Option<String>,
     name: Option<String>,
+    client_id: Option<String>,
 ) -> Result<InvoiceWithEntries, String> {
     create_invoice_internal(
         pool.inner(),
@@ -507,6 +579,7 @@ pub async fn create_invoice(
         format,
         layout_data,
         name,
+        client_id,
     )
     .await
 }
@@ -670,6 +743,18 @@ mod tests {
             "ALTER TABLE invoices ADD COLUMN format TEXT NOT NULL DEFAULT 'detailed'",
             "ALTER TABLE invoices ADD COLUMN layout_data TEXT",
             "ALTER TABLE invoices ADD COLUMN name TEXT",
+            "ALTER TABLE time_entries ADD COLUMN client_id TEXT",
+            "ALTER TABLE invoices ADD COLUMN client_id TEXT",
+            "ALTER TABLE invoices ADD COLUMN client_name TEXT",
+            "CREATE TABLE IF NOT EXISTS clients (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                hourly_rate REAL NOT NULL DEFAULT 0,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
         ] {
             let _ = sqlx::query(stmt).execute(&pool).await;
         }
@@ -713,6 +798,7 @@ mod tests {
             "detailed".into(),
             None,
             None,
+            None,
         )
         .await
         .expect("preview");
@@ -732,6 +818,7 @@ mod tests {
             "2026-03-01".into(),
             "2026-03-31".into(),
             "detailed".into(),
+            None,
             None,
             None,
         )
@@ -768,6 +855,7 @@ mod tests {
             "detailed".into(),
             None,
             Some("March work".into()),
+            None,
         )
         .await
         .expect("create invoice");
@@ -798,6 +886,7 @@ mod tests {
             "detailed".into(),
             None,
             None,
+            None,
         )
         .await;
 
@@ -815,6 +904,7 @@ mod tests {
             "2026-03-31".into(),
             vec!["entry-1".into()],
             "detailed".into(),
+            None,
             None,
             None,
         )

@@ -18,8 +18,8 @@ interface MonthViewProps {
   entries: TimeEntry[];
   tags: EntryTag[];
   month: Date;
-  selectedDay: string | null;
-  onSelectDay: (day: string | null) => void;
+  selectedDay: string;
+  onSelectDay: (day: string) => void;
   onUpdate: (args: UpdateEntryArgs) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
@@ -55,7 +55,7 @@ export function MonthView({
     [month]
   );
   const startOffset = mondayOffset(days[0]);
-  const selectedEntries = selectedDay ? (byDate.get(selectedDay) ?? []) : [];
+  const selectedEntries = byDate.get(selectedDay) ?? [];
   const selectedTotal = selectedEntries.reduce((sum, entry) => sum + (entry.duration_minutes ?? 0), 0);
 
   return (
@@ -89,7 +89,7 @@ export function MonthView({
             return (
               <button
                 key={dateStr}
-                onClick={() => onSelectDay(isSelected ? null : dateStr)}
+                onClick={() => onSelectDay(dateStr)}
                 className={`relative min-h-[76px] rounded p-2 text-left transition-all border ${
                   isSelected
                     ? "bg-[var(--brand-muted)] border-[var(--brand-muted-border)]"
@@ -137,8 +137,7 @@ export function MonthView({
         </div>
       </div>
 
-      {selectedDay && (
-        <div className="w-72 flex-shrink-0 border-l border-[var(--border)] flex flex-col overflow-hidden animate-fade-in">
+      <div className="w-72 flex-shrink-0 border-l border-[var(--border)] flex flex-col overflow-hidden animate-fade-in">
           <div className="px-4 py-3 border-b border-[var(--border)]">
             <p className="text-sm font-semibold text-[var(--text-primary)]">
               {format(parseISO(selectedDay), "EEEE, MMM d")}
@@ -170,7 +169,6 @@ export function MonthView({
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }

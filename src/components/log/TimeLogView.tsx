@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEntries } from "../../hooks/useEntries";
 import { useTags } from "../../hooks/useTags";
+import { useClients } from "../../hooks/useClients";
 import { LogFilters } from "./LogFilters";
 import { EntryRow } from "./EntryRow";
 import { EntryForm } from "./EntryForm";
@@ -15,13 +16,14 @@ type ViewMode = "list" | "month";
 export function TimeLogView() {
   const { entries, loading, error, load, add, update, remove } = useEntries();
   const { tags } = useTags();
+  const { clients } = useClients();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filters, setFilters] = useState<ListEntriesArgs>(() => {
     const { from, to } = currentMonthRange();
     return { date_from: from, date_to: to };
   });
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string>(() => format(new Date(), "yyyy-MM-dd"));
   const [showForm, setShowForm] = useState(false);
 
   // Load entries whenever filters or calendar month changes
@@ -37,7 +39,6 @@ export function TimeLogView() {
         date_from: format(startOfMonth(calendarMonth), "yyyy-MM-dd"),
         date_to:   format(endOfMonth(calendarMonth),   "yyyy-MM-dd"),
       });
-      setSelectedDay(null);
     }
   }, [calendarMonth, viewMode]);
 
@@ -49,7 +50,6 @@ export function TimeLogView() {
         date_from: format(startOfMonth(calendarMonth), "yyyy-MM-dd"),
         date_to:   format(endOfMonth(calendarMonth),   "yyyy-MM-dd"),
       });
-      setSelectedDay(null);
     } else {
       load(filters);
     }
@@ -173,7 +173,7 @@ export function TimeLogView() {
           <table className="w-full">
             <thead className="sticky top-0 bg-[var(--surface-0)] z-10 border-b border-[var(--border)]">
               <tr>
-                {["Date", "Time", "Description", "Type", "Duration", ""].map((col) => (
+                {["Date", "Time", "Description", "Type", "Client", "Duration", ""].map((col) => (
                   <th
                     key={col}
                     className="px-4 py-2.5 text-left text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider"
@@ -189,6 +189,7 @@ export function TimeLogView() {
                   key={entry.id}
                   entry={entry}
                   tags={tags}
+                  clients={clients}
                   onUpdate={async (args) => { await update(args); }}
                   onDelete={remove}
                 />

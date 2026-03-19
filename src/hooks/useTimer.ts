@@ -5,8 +5,8 @@ import { startTimer, stopTimer, discardTimer, getActiveTimer } from "../lib/comm
 export function useTimer() {
   const { activeEntry, isRunning, setActiveEntry, clear } = useTimerStore();
 
-  const start = useCallback(async () => {
-    const entry = await startTimer();
+  const start = useCallback(async (clientId?: string | null) => {
+    const entry = await startTimer(clientId ?? null);
     setActiveEntry(entry);
     return entry;
   }, [setActiveEntry]);

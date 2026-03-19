@@ -40,9 +40,10 @@ export function useInvoices() {
       periodEnd: string,
       format: InvoiceFormat = "detailed",
       layoutData: string | null = null,
-      name: string | null = null
+      name: string | null = null,
+      clientId: string | null = null
     ): Promise<InvoicePreview> => {
-      return previewInvoice(periodStart, periodEnd, format, layoutData, name);
+      return previewInvoice(periodStart, periodEnd, format, layoutData, name, clientId);
     },
     []
   );
@@ -54,9 +55,12 @@ export function useInvoices() {
       entryIds: string[],
       format: InvoiceFormat = "detailed",
       layoutData: string | null = null,
-      name: string | null = null
+      name: string | null = null,
+      clientId: string | null = null
     ): Promise<InvoiceWithEntries> => {
-      const result = await createInvoice(periodStart, periodEnd, entryIds, format, layoutData, name);
+      const result = await createInvoice(
+        periodStart, periodEnd, entryIds, format, layoutData, name, clientId
+      );
       setInvoices((prev) => [result.invoice, ...prev]);
       return result;
     },

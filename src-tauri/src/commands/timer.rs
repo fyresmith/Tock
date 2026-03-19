@@ -2,6 +2,7 @@ use chrono::Local;
 use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
 
 use crate::backup;
@@ -20,6 +21,7 @@ pub const TIME_ENTRY_SELECT: &str = "
     COALESCE(entry_tags.color, '#64748b') AS tag_color,
     time_entries.invoiced,
     time_entries.invoice_id,
+    time_entries.client_id,
     time_entries.created_at,
     time_entries.updated_at
 ";
@@ -38,6 +40,7 @@ pub struct TimeEntry {
     pub tag_color: String,
     pub invoiced: bool,
     pub invoice_id: Option<String>,
+    pub client_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -91,6 +94,8 @@ struct ActiveTimerSeed {
 #[tauri::command]
 pub async fn start_timer(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    client_id: Option<String>,
 ) -> Result<TimeEntry, String> {
     if let Some(existing) = sqlx::query_as::<_, ActiveTimerSeed>(
         "SELECT id, tag_id FROM time_entries WHERE end_time IS NULL ORDER BY created_at DESC LIMIT 1",
@@ -109,21 +114,22 @@ pub async fn start_timer(
     let now = now_iso();
 
     sqlx::query(
-        "INSERT INTO time_entries (id, date, start_time, end_time, duration_minutes, description, entry_type, tag_id, invoiced, invoice_id, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, NULL, '', ?, ?, 0, NULL, ?, ?)",
+        "INSERT INTO time_entries (id, date, start_time, end_time, duration_minutes, description, entry_type, tag_id, client_id, invoiced, invoice_id, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, NULL, '', ?, ?, ?, 0, NULL, ?, ?)",
     )
     .bind(&id)
     .bind(&date)
     .bind(&start_time)
     .bind(&default_tag.name)
     .bind(&default_tag.id)
+    .bind(&client_id)
     .bind(&now)
     .bind(&now)
     .execute(pool.inner())
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(TimeEntry {
+    let entry = TimeEntry {
         id,
         date,
         start_time,
@@ -136,9 +142,12 @@ pub async fn start_timer(
         tag_color: default_tag.color,
         invoiced: false,
         invoice_id: None,
+        client_id,
         created_at: now.clone(),
         updated_at: now,
-    })
+    };
+    let _ = app.emit("timer-changed", ());
+    Ok(entry)
 }
 
 #[tauri::command]
@@ -178,26 +187,9 @@ pub async fn stop_timer(
     .await
     .map_err(|e| e.to_string())?;
 
-    let entry = TimeEntry {
-        id: entry_id,
-        date,
-        start_time,
-        end_time: Some(end_time),
-        duration_minutes: Some(duration),
-        description,
-        entry_type: tag.name.clone(),
-        tag_id: Some(tag.id.clone()),
-        tag_name: tag.name,
-        tag_color: tag.color,
-        invoiced: false,
-        invoice_id: None,
-        created_at: now.clone(),
-        updated_at: now,
-    };
-
     let _ = backup::export_csv_internal(pool.inner(), &app).await;
-
-    Ok(entry)
+    let _ = app.emit("timer-changed", ());
+    fetch_time_entry_by_id(pool.inner(), &entry_id).await
 }
 
 #[tauri::command]
@@ -217,12 +209,31 @@ pub async fn get_active_timer(
 #[tauri::command]
 pub async fn discard_timer(
     pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
     entry_id: String,
 ) -> Result<(), String> {
     sqlx::query("DELETE FROM time_entries WHERE id = ? AND end_time IS NULL")
         .bind(&entry_id)
         .execute(pool.inner())
         .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("timer-changed", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_timer_popup(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("timer-popup") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, "timer-popup", WebviewUrl::App("index.html".into()))
+        .title("Timer")
+        .inner_size(280.0, 280.0)
+        .resizable(false)
+        .always_on_top(true)
+        .build()
         .map_err(|e| e.to_string())?;
     Ok(())
 }
