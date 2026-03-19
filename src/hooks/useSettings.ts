@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getSettings, updateSetting, Settings } from "../lib/commands";
+import { getSettings, updateSetting, updateSettingsBatch, Settings, SettingChange } from "../lib/commands";
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -28,5 +28,11 @@ export function useSettings() {
     return s;
   }, []);
 
-  return { settings, loading, error, update, reload: load };
+  const updateMany = useCallback(async (changes: SettingChange[]) => {
+    const s = await updateSettingsBatch(changes);
+    setSettings(s);
+    return s;
+  }, []);
+
+  return { settings, loading, error, update, updateMany, reload: load };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDashboardData, DashboardData } from "../../lib/commands";
 import { useSettings } from "../../hooks/useSettings";
-import { formatCurrency, formatMonthLabel } from "../../lib/dateUtils";
+import { formatCurrency, formatDateShort, formatMonthLabel } from "../../lib/dateUtils";
 import { format } from "date-fns";
 import {
   BarChart, Bar, LineChart, Line,
@@ -41,7 +41,6 @@ export function DashboardView() {
   const [loading, setLoading] = useState(true);
   const { settings } = useSettings();
   const currency = settings?.currency ?? "USD";
-  const rate = parseFloat(settings?.hourly_rate ?? "0") || 0;
 
   useEffect(() => {
     getDashboardData().then(setData).catch(console.error).finally(() => setLoading(false));
@@ -53,43 +52,80 @@ export function DashboardView() {
 
   // Derived
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const todayHours = data.daily_bars.find(d => d.date === todayStr)?.hours ?? 0;
+  const todayBar = data.daily_bars.find(d => d.date === todayStr);
+  const todayHours = todayBar?.hours ?? 0;
+  const todayEarnings = todayBar?.earnings ?? 0;
 
   const daysWorked = data.daily_bars.filter(d => d.hours > 0).length;
   const bestDay = data.daily_bars.reduce<typeof data.daily_bars[0] | null>(
     (max, d) => (!max || d.hours > max.hours ? d : max), null
   );
   const dailyAvg = daysWorked > 0 ? data.month_hours / daysWorked : 0;
+  const dailyAvgEarnings = daysWorked > 0 ? data.month_earnings / daysWorked : 0;
 
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const dayOfMonth = now.getDate();
-  const projected = dayOfMonth > 0 ? (data.month_hours / dayOfMonth) * daysInMonth : 0;
+  const projectedHours = dayOfMonth > 0 ? (data.month_hours / dayOfMonth) * daysInMonth : 0;
+  const projectedEarnings = dayOfMonth > 0 ? (data.month_earnings / dayOfMonth) * daysInMonth : 0;
 
-  const momPct = pct(data.month_hours, data.last_month_hours);
+  const momPct = pct(data.month_earnings, data.last_month_earnings);
   const wl = data.weekly_trend.length;
-  const wowPct = wl >= 2 ? pct(data.weekly_trend[wl - 1].hours, data.weekly_trend[wl - 2].hours) : null;
+  const wowPct = wl >= 2
+    ? pct(data.weekly_trend[wl - 1].earnings, data.weekly_trend[wl - 2].earnings)
+    : null;
 
   // Monthly history newest-first
   const monthlyHistory = [...data.monthly_bars].reverse().slice(0, 8);
 
   const topStats = [
-    { label: "TODAY",      hours: todayHours,              earnings: todayHours * rate,          delta: null },
+    { label: "TODAY",      hours: todayHours,              earnings: todayEarnings,              delta: null },
     { label: "THIS WEEK",  hours: data.week_hours,         earnings: data.week_earnings,         delta: wowPct },
     { label: "THIS MONTH", hours: data.month_hours,        earnings: data.month_earnings,        delta: momPct },
     { label: "LAST MONTH", hours: data.last_month_hours,   earnings: data.last_month_earnings,   delta: null },
     { label: "YTD",        hours: data.ytd_hours,          earnings: data.ytd_earnings,          delta: null },
-    { label: "DAILY AVG",  hours: dailyAvg,                earnings: dailyAvg * rate,            delta: null },
+    { label: "DAILY AVG",  hours: dailyAvg,                earnings: dailyAvgEarnings,           delta: null },
+  ];
+
+  const receivableStats = [
+    {
+      label: "UNPAID",
+      value: formatCurrency(data.unpaid_amount, currency),
+      detail: `${data.open_invoice_count} open ${data.open_invoice_count === 1 ? "invoice" : "invoices"}`,
+      tone: "text-[var(--text-primary)]",
+    },
+    {
+      label: "OVERDUE",
+      value: formatCurrency(data.overdue_amount, currency),
+      detail: `${data.overdue_invoice_count} overdue ${data.overdue_invoice_count === 1 ? "invoice" : "invoices"}`,
+      tone: data.overdue_amount > 0 ? "text-[var(--danger)]" : "text-[var(--text-primary)]",
+    },
+    {
+      label: "DUE SOON",
+      value: formatCurrency(data.due_soon_amount, currency),
+      detail: `${data.due_soon_invoice_count} due in 7 days`,
+      tone: data.due_soon_amount > 0 ? "text-[var(--warning)]" : "text-[var(--text-primary)]",
+    },
+    {
+      label: "COLLECTIONS",
+      value: data.open_invoice_count === 0 ? "All clear" : `${data.client_receivables.length} clients`,
+      detail: data.open_invoice_count === 0 ? "No outstanding invoices" : "Grouped by client",
+      tone: "text-[var(--text-primary)]",
+    },
   ];
 
   const monthStats = [
-    { label: "Days worked",   value: `${daysWorked} / ${daysInMonth}` },
-    { label: "Daily average", value: fmtH(dailyAvg) },
-    { label: "Best day",      value: bestDay ? `${bestDay.date.slice(5).replace("-", "/")} · ${fmtH(bestDay.hours)}` : "—" },
+    { label: "Billable days", value: `${daysWorked} / ${daysInMonth}` },
+    { label: "Daily average", value: fmtH(dailyAvg), sub: formatCurrency(dailyAvgEarnings, currency) },
+    {
+      label: "Best day",
+      value: bestDay ? `${bestDay.date.slice(5).replace("-", "/")} · ${fmtH(bestDay.hours)}` : "—",
+      sub: bestDay ? formatCurrency(bestDay.earnings, currency) : null,
+    },
     {
       label: "Projected",
-      value: fmtH(projected),
-      sub: rate > 0 ? formatCurrency(projected * rate, currency) : null,
+      value: fmtH(projectedHours),
+      sub: formatCurrency(projectedEarnings, currency),
     },
     {
       label: "vs last month",
@@ -104,7 +140,12 @@ export function DashboardView() {
 
         {/* Header */}
         <div className="flex items-baseline justify-between">
-          <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Dashboard</h1>
+          <div>
+            <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Dashboard</h1>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+              Rounded billable time, effective rates, and open invoices
+            </p>
+          </div>
           <p className="text-[11px] text-[var(--text-muted)]">{format(now, "EEEE, MMMM d, yyyy")}</p>
         </div>
 
@@ -122,11 +163,27 @@ export function DashboardView() {
           ))}
         </div>
 
+        <div className="grid grid-cols-4 gap-3">
+          {receivableStats.map((stat) => (
+            <div key={stat.label} className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-3 py-3">
+              <p className="text-[9px] font-semibold tracking-widest text-[var(--text-muted)] uppercase mb-2">
+                {stat.label}
+              </p>
+              <p className={`text-[16px] font-semibold leading-none ${stat.tone}`}>
+                {stat.value}
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                {stat.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+
         {/* Middle: daily chart + month breakdown */}
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2 bg-[var(--surface-1)] border border-[var(--border)] rounded p-3">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Daily hours — this month</p>
+              <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Daily billable hours — this month</p>
               <p className="text-[11px] text-[var(--text-muted)] tabular-nums">{daysWorked} days · {fmtH(data.month_hours)}</p>
             </div>
             {data.daily_bars.length === 0 ? (
@@ -137,7 +194,16 @@ export function DashboardView() {
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: "var(--text-muted)" }} tickFormatter={v => v.slice(8)} axisLine={false} tickLine={false} interval={1} />
                   <YAxis tick={{ fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}h`} width={28} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown) => [`${(v as number).toFixed(2)}h`, "Hours"]} labelFormatter={l => `Day ${String(l).slice(8)}`} cursor={{ fill: "var(--surface-3)", opacity: 0.6 }} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: unknown) => [`${(v as number).toFixed(2)}h`, "Billable hours"]}
+                    labelFormatter={(l, payload) => {
+                      const point = payload?.[0]?.payload as { date?: string; earnings?: number } | undefined;
+                      const earnings = point?.earnings ?? 0;
+                      return `Day ${String(l).slice(8)} · ${formatCurrency(earnings, currency)}`;
+                    }}
+                    cursor={{ fill: "var(--surface-3)", opacity: 0.6 }}
+                  />
                   <Bar dataKey="hours" fill="var(--brand)" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -163,7 +229,7 @@ export function DashboardView() {
         {/* Bottom: weekly trend + monthly history */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-3">
-            <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Weekly trend — 12 weeks</p>
+            <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Weekly billable trend — 12 weeks</p>
             {data.weekly_trend.length === 0 ? (
               <div className="h-[118px] flex items-center justify-center text-xs text-[var(--text-muted)]">No data yet</div>
             ) : (
@@ -172,7 +238,15 @@ export function DashboardView() {
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="week" tick={{ fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => v.slice(5)} />
                   <YAxis tick={{ fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}h`} width={28} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown) => [`${(v as number).toFixed(2)}h`, "Hours"]} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(v: unknown) => [`${(v as number).toFixed(2)}h`, "Billable hours"]}
+                    labelFormatter={(l, payload) => {
+                      const point = payload?.[0]?.payload as { earnings?: number } | undefined;
+                      const earnings = point?.earnings ?? 0;
+                      return `${String(l)} · ${formatCurrency(earnings, currency)}`;
+                    }}
+                  />
                   <Line type="monotone" dataKey="hours" stroke="var(--brand)" strokeWidth={1.5} dot={{ fill: "var(--brand)", r: 2 }} activeDot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
@@ -180,41 +254,76 @@ export function DashboardView() {
           </div>
 
           <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-3">
-            <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2.5">Monthly history</p>
-            {monthlyHistory.length === 0 ? (
-              <div className="h-[118px] flex items-center justify-center text-xs text-[var(--text-muted)]">No data yet</div>
+            <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2.5">Open receivables by client</p>
+            {data.client_receivables.length === 0 ? (
+              <div className="h-[118px] flex items-center justify-center text-xs text-[var(--text-muted)]">No outstanding invoices</div>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    {["Month", "Hours", "Est. earnings", "MoM"].map(col => (
-                      <th key={col} className="text-left text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)] pb-1.5 pr-2 last:pr-0">{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyHistory.map((m, i) => {
-                    const older = monthlyHistory[i + 1];
-                    const delta = older ? pct(m.hours, older.hours) : null;
-                    return (
-                      <tr key={m.month} className="border-b border-[var(--border)] last:border-0">
-                        <td className="py-1.5 text-[11px] text-[var(--text-secondary)] pr-2">{formatMonthLabel(m.month)}</td>
-                        <td className="py-1.5 text-[11px] font-medium tabular-nums text-[var(--text-primary)] pr-2">{fmtH(m.hours)}</td>
-                        <td className="py-1.5 text-[11px] tabular-nums text-[var(--text-secondary)] pr-2">
-                          {rate > 0 ? formatCurrency(m.hours * rate, currency) : "—"}
-                        </td>
-                        <td className="py-1.5 text-[10px] tabular-nums font-semibold">
-                          {delta != null
-                            ? <span style={{ color: delta >= 0 ? "var(--success)" : "var(--danger)" }}>{delta >= 0 ? "+" : ""}{delta.toFixed(0)}%</span>
-                            : <span className="text-[var(--text-muted)]">—</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="divide-y divide-[var(--border)]">
+                {data.client_receivables.map((client) => (
+                  <div key={client.client_name} className="py-2 first:pt-0 last:pb-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium text-[var(--text-primary)] truncate">
+                          {client.client_name}
+                        </p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                          {client.invoice_count} open · {client.overdue_count} overdue
+                          {client.next_due_at ? ` · next ${formatDateShort(client.next_due_at)}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[11px] font-semibold tabular-nums text-[var(--text-primary)]">
+                          {formatCurrency(client.open_amount, currency)}
+                        </p>
+                        <p className={`text-[10px] tabular-nums mt-0.5 ${client.overdue_amount > 0 ? "text-[var(--danger)]" : "text-[var(--text-muted)]"}`}>
+                          {client.overdue_amount > 0
+                            ? `${formatCurrency(client.overdue_amount, currency)} overdue`
+                            : "Current"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
+        </div>
+
+        <div className="bg-[var(--surface-1)] border border-[var(--border)] rounded p-3">
+          <p className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2.5">Monthly history</p>
+          {monthlyHistory.length === 0 ? (
+            <div className="h-[118px] flex items-center justify-center text-xs text-[var(--text-muted)]">No data yet</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  {["Month", "Billed hours", "Earnings", "MoM"].map(col => (
+                    <th key={col} className="text-left text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)] pb-1.5 pr-2 last:pr-0">{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyHistory.map((m, i) => {
+                  const older = monthlyHistory[i + 1];
+                  const delta = older ? pct(m.earnings, older.earnings) : null;
+                  return (
+                    <tr key={m.month} className="border-b border-[var(--border)] last:border-0">
+                      <td className="py-1.5 text-[11px] text-[var(--text-secondary)] pr-2">{formatMonthLabel(m.month)}</td>
+                      <td className="py-1.5 text-[11px] font-medium tabular-nums text-[var(--text-primary)] pr-2">{fmtH(m.hours)}</td>
+                      <td className="py-1.5 text-[11px] tabular-nums text-[var(--text-secondary)] pr-2">
+                        {formatCurrency(m.earnings, currency)}
+                      </td>
+                      <td className="py-1.5 text-[10px] tabular-nums font-semibold">
+                        {delta != null
+                          ? <span style={{ color: delta >= 0 ? "var(--success)" : "var(--danger)" }}>{delta >= 0 ? "+" : ""}{delta.toFixed(0)}%</span>
+                          : <span className="text-[var(--text-muted)]">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
 
       </div>

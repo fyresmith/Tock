@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { EntryTag, ListEntriesArgs } from "../../lib/commands";
+import { Client, EntryTag, ListEntriesArgs } from "../../lib/commands";
 import { currentMonthRange, formatDate } from "../../lib/dateUtils";
 import { TagBadge } from "../tags/TagBadge";
 import { CalendarDays, Search, X } from "lucide-react";
@@ -9,9 +9,10 @@ interface LogFiltersProps {
   filters: ListEntriesArgs;
   onChange: (filters: ListEntriesArgs) => void;
   tags: EntryTag[];
+  clients: Client[];
 }
 
-export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
+export function LogFilters({ filters, onChange, tags, clients }: LogFiltersProps) {
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -19,6 +20,7 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
     onChange({ ...filters, [key]: value });
 
   const activeTag = filters.tag_id ?? "";
+  const activeClient = filters.client_id === undefined ? "__all__" : filters.client_id === "" ? "__none__" : filters.client_id;
   const activeInvoiced = filters.invoiced === undefined ? "all" : filters.invoiced ? "invoiced" : "uninvoiced";
   const activeBillable = filters.billable === undefined ? "all" : filters.billable ? "billable" : "non-billable";
   const activeTags = tags.filter((tag) => !tag.is_archived);
@@ -118,6 +120,27 @@ export function LogFilters({ filters, onChange, tags }: LogFiltersProps) {
           className="bg-[var(--surface-2)] border border-[var(--border)] rounded pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none w-36"
         />
       </div>
+
+      <select
+        value={activeClient}
+        onChange={(e) => {
+          const value = e.target.value;
+          onChange({
+            ...filters,
+            client_id: value === "__all__" ? undefined : value === "__none__" ? "" : value,
+          });
+        }}
+        className="bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+      >
+        <option value="__all__">Any client</option>
+        <option value="__none__">No client</option>
+        {clients.map((client) => (
+          <option key={client.id} value={client.id}>
+            {client.name}
+            {client.is_archived ? " (archived)" : ""}
+          </option>
+        ))}
+      </select>
 
       {/* Type pills */}
       <div className="flex items-center gap-1">

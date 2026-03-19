@@ -8,7 +8,7 @@ import {
   parseISO,
   startOfMonth,
 } from "date-fns";
-import { EntryTag, TimeEntry, UpdateEntryArgs } from "../../lib/commands";
+import { Client, EntryTag, TimeEntry, UpdateEntryArgs } from "../../lib/commands";
 import { formatTime, minutesToHHMM } from "../../lib/dateUtils";
 import { TagBadge } from "../tags/TagBadge";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
@@ -17,6 +17,7 @@ import { Check, Pencil, Trash2 } from "lucide-react";
 interface MonthViewProps {
   entries: TimeEntry[];
   tags: EntryTag[];
+  clients: Client[];
   month: Date;
   selectedDay: string;
   onSelectDay: (day: string) => void;
@@ -34,6 +35,7 @@ function mondayOffset(date: Date): number {
 export function MonthView({
   entries,
   tags,
+  clients,
   month,
   selectedDay,
   onSelectDay,
@@ -90,7 +92,7 @@ export function MonthView({
               <button
                 key={dateStr}
                 onClick={() => onSelectDay(dateStr)}
-                className={`relative min-h-[76px] rounded p-2 text-left transition-all border ${
+                className={`relative min-h-[76px] rounded p-2 flex flex-col items-start transition-all border ${
                   isSelected
                     ? "bg-[var(--brand-muted)] border-[var(--brand-muted-border)]"
                     : hasEntries
@@ -98,7 +100,7 @@ export function MonthView({
                     : "bg-[var(--surface-1)] border-[var(--border)] hover:bg-[var(--surface-2)]"
                 }`}
               >
-                <span className="flex justify-start mb-1">
+                <span className="mb-1">
                   {isToday ? (
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--brand)] text-white text-[10px] font-bold">
                       {format(day, "d")}
@@ -161,6 +163,7 @@ export function MonthView({
                     key={entry.id}
                     entry={entry}
                     tags={tags}
+                    clients={clients}
                     onUpdate={onUpdate}
                     onDelete={onDelete}
                   />
@@ -176,11 +179,13 @@ export function MonthView({
 function DayEntry({
   entry,
   tags,
+  clients,
   onUpdate,
   onDelete,
 }: {
   entry: TimeEntry;
   tags: EntryTag[];
+  clients: Client[];
   onUpdate: (args: UpdateEntryArgs) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
@@ -188,11 +193,13 @@ function DayEntry({
   const [form, setForm] = useState({
     description: entry.description,
     tag_id: entry.tag_id ?? "",
+    client_id: entry.client_id ?? "",
     start_time: entry.start_time,
     end_time: entry.end_time ?? "",
   });
   const [saving, setSaving] = useState(false);
   const selectableTags = getSelectableTags(tags, entry.tag_id);
+  const editableClients = clients.filter((client) => !client.is_archived || client.id === entry.client_id);
 
   const handleSave = async () => {
     setSaving(true);
@@ -201,6 +208,7 @@ function DayEntry({
         id: entry.id,
         description: form.description,
         tag_id: form.tag_id,
+        client_id: form.client_id,
         start_time: form.start_time,
         end_time: form.end_time,
       });
@@ -208,6 +216,17 @@ function DayEntry({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    setForm({
+      description: entry.description,
+      tag_id: entry.tag_id ?? "",
+      client_id: entry.client_id ?? "",
+      start_time: entry.start_time,
+      end_time: entry.end_time ?? "",
+    });
+    setEditing(false);
   };
 
   if (editing) {
@@ -241,9 +260,22 @@ function DayEntry({
           onChange={(tag_id) => setForm({ ...form, tag_id })}
           className="w-full bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
         />
+        <select
+          value={form.client_id}
+          onChange={(event) => setForm({ ...form, client_id: event.target.value })}
+          className="w-full bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+        >
+          <option value="">No client</option>
+          {editableClients.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.name}
+              {client.is_archived ? " (archived)" : ""}
+            </option>
+          ))}
+        </select>
         <div className="flex gap-1 pt-0.5">
           <button
-            onClick={() => setEditing(false)}
+            onClick={handleCancel}
             className="flex-1 py-1 rounded text-[11px] text-[var(--text-muted)] hover:bg-[var(--surface-3)] transition-colors"
           >
             Cancel

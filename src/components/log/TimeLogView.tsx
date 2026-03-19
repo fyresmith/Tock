@@ -6,7 +6,12 @@ import { LogFilters } from "./LogFilters";
 import { EntryRow } from "./EntryRow";
 import { EntryForm } from "./EntryForm";
 import { MonthView } from "./MonthView";
-import { ListEntriesArgs, bulkDeleteEntries, bulkUpdateTag } from "../../lib/commands";
+import {
+  ListEntriesArgs,
+  bulkDeleteEntries,
+  bulkUpdateClient,
+  bulkUpdateTag,
+} from "../../lib/commands";
 import { minutesToHHMM, currentMonthRange } from "../../lib/dateUtils";
 import { Plus, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
@@ -17,7 +22,7 @@ type ViewMode = "list" | "month";
 export function TimeLogView() {
   const { entries, loading, error, load, add, update, remove } = useEntries();
   const { tags } = useTags();
-  const { clients } = useClients();
+  const { clients, activeClients } = useClients();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filters, setFilters] = useState<ListEntriesArgs>(() => {
     const { from, to } = currentMonthRange();
@@ -28,6 +33,7 @@ export function TimeLogView() {
   const [showForm, setShowForm] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
+  const [bulkClientId, setBulkClientId] = useState("");
 
   // Load entries whenever filters or calendar month changes
   useEffect(() => {
@@ -101,6 +107,18 @@ export function TimeLogView() {
     }
   };
 
+  const handleBulkReassignClient = async () => {
+    if (!bulkClientId) return;
+    try {
+      await bulkUpdateClient([...selectedIds], bulkClientId === "__none__" ? null : bulkClientId);
+      setSelectedIds(new Set());
+      setBulkClientId("");
+      load(filters);
+    } catch (e) {
+      alert(String(e));
+    }
+  };
+
   const dateRange =
     filters.date_from && filters.date_to
       ? `${filters.date_from} – ${filters.date_to}`
@@ -156,7 +174,7 @@ export function TimeLogView() {
 
         {/* List mode: filters */}
         {viewMode === "list" && (
-          <LogFilters filters={filters} onChange={setFilters} tags={tags} />
+          <LogFilters filters={filters} onChange={setFilters} tags={tags} clients={clients} />
         )}
 
         {/* Month mode: month nav */}
@@ -200,6 +218,7 @@ export function TimeLogView() {
         <MonthView
           entries={entries}
           tags={tags}
+          clients={clients}
           month={calendarMonth}
           selectedDay={selectedDay}
           onSelectDay={setSelectedDay}
@@ -240,6 +259,28 @@ export function TimeLogView() {
                   className="px-2.5 py-1 rounded text-xs bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
                 >
                   Re-tag
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={bulkClientId}
+                  onChange={(e) => setBulkClientId(e.target.value)}
+                  className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+                >
+                  <option value="">Pick client…</option>
+                  <option value="__none__">No client</option>
+                  {activeClients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleBulkReassignClient}
+                  disabled={!bulkClientId}
+                  className="px-2.5 py-1 rounded text-xs bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 transition-colors"
+                >
+                  Reassign
                 </button>
               </div>
               <button

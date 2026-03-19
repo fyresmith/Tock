@@ -9,13 +9,16 @@ use commands::{
         archive_client, create_client, list_clients, set_default_client, unarchive_client,
         update_client,
     },
-    entries::{bulk_delete_entries, bulk_update_tag, create_entry, delete_entry, list_entries, update_entry},
+    entries::{
+        bulk_delete_entries, bulk_update_client, bulk_update_tag, create_entry, delete_entry,
+        list_entries, update_entry,
+    },
     invoices::{
         cancel_invoice, create_invoice, delete_invoice, get_invoice_entries, issue_invoice,
         list_invoices, mark_invoice_paid, preview_invoice, regenerate_invoice,
         revert_invoice_to_draft, save_invoice_pdf, send_invoice,
     },
-    settings::{get_dashboard_data, get_settings, update_setting},
+    settings::{get_dashboard_data, get_settings, update_setting, update_settings_batch},
     tags::{archive_tag, create_tag, list_tags, unarchive_tag, update_tag},
     timer::{discard_timer, get_active_timer, open_timer_popup, start_timer, stop_timer},
 };
@@ -51,6 +54,7 @@ pub fn run() {
             list_entries,
             bulk_delete_entries,
             bulk_update_tag,
+            bulk_update_client,
             // Invoices
             preview_invoice,
             create_invoice,
@@ -67,6 +71,7 @@ pub fn run() {
             // Settings & dashboard
             get_settings,
             update_setting,
+            update_settings_batch,
             get_dashboard_data,
             // Tags
             list_tags,

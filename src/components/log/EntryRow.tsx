@@ -19,10 +19,12 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, o
   const clientName = entry.client_id
     ? (clients.find((c) => c.id === entry.client_id)?.name ?? null)
     : null;
+  const editableClients = clients.filter((client) => !client.is_archived || client.id === entry.client_id);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     description: entry.description,
     tag_id: entry.tag_id ?? "",
+    client_id: entry.client_id ?? "",
     start_time: entry.start_time,
     end_time: entry.end_time ?? "",
     billable: entry.billable,
@@ -38,6 +40,7 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, o
         id: entry.id,
         description: form.description,
         tag_id: form.tag_id,
+        client_id: form.client_id,
         start_time: form.start_time,
         end_time: form.end_time,
         billable: form.billable,
@@ -53,6 +56,7 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, o
     setForm({
       description: entry.description,
       tag_id: entry.tag_id ?? "",
+      client_id: entry.client_id ?? "",
       start_time: entry.start_time,
       end_time: entry.end_time ?? "",
       billable: entry.billable,
@@ -101,8 +105,20 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, o
             className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
           />
         </td>
-        <td className="px-4 py-2 text-xs text-[var(--text-muted)] whitespace-nowrap">
-          {clientName ?? <span className="opacity-40">—</span>}
+        <td className="px-4 py-2">
+          <select
+            value={form.client_id}
+            onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+            className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none min-w-32"
+          >
+            <option value="">No client</option>
+            {editableClients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+                {client.is_archived ? " (archived)" : ""}
+              </option>
+            ))}
+          </select>
         </td>
         <td className="px-4 py-2">
           <div className="flex flex-col gap-1.5">

@@ -105,6 +105,11 @@ export interface Settings {
   time_rounding: string;
 }
 
+export interface SettingChange {
+  key: string;
+  value: string;
+}
+
 export type BackupKind = "auto" | "manual" | "safety";
 
 export interface TableCount {
@@ -151,16 +156,28 @@ export interface RestoreSummary {
 export interface DailyBar {
   date: string;
   hours: number;
+  earnings: number;
 }
 
 export interface WeeklyBar {
   week: string;
   hours: number;
+  earnings: number;
 }
 
 export interface MonthlyBar {
   month: string;
   hours: number;
+  earnings: number;
+}
+
+export interface ClientReceivable {
+  client_name: string;
+  open_amount: number;
+  overdue_amount: number;
+  invoice_count: number;
+  overdue_count: number;
+  next_due_at: string | null;
 }
 
 export interface DashboardData {
@@ -172,9 +189,16 @@ export interface DashboardData {
   month_earnings: number;
   last_month_earnings: number;
   ytd_earnings: number;
+  unpaid_amount: number;
+  overdue_amount: number;
+  due_soon_amount: number;
+  open_invoice_count: number;
+  overdue_invoice_count: number;
+  due_soon_invoice_count: number;
   daily_bars: DailyBar[];
   weekly_trend: WeeklyBar[];
   monthly_bars: MonthlyBar[];
+  client_receivables: ClientReceivable[];
 }
 
 // ── Timer ──────────────────────────────────────────────────────────
@@ -211,6 +235,7 @@ export interface UpdateEntryArgs {
   duration_minutes?: number;
   description?: string;
   tag_id?: string;
+  client_id?: string | null;
   billable?: boolean;
   hourly_rate?: number | null;
 }
@@ -220,6 +245,7 @@ export interface ListEntriesArgs {
   date_to?: string;
   search?: string;
   tag_id?: string;
+  client_id?: string;
   invoiced?: boolean;
   billable?: boolean;
 }
@@ -240,6 +266,9 @@ export const bulkDeleteEntries = (ids: string[]) =>
 
 export const bulkUpdateTag = (ids: string[], tagId: string) =>
   invoke<void>("bulk_update_tag", { ids, tagId });
+
+export const bulkUpdateClient = (ids: string[], clientId: string | null) =>
+  invoke<void>("bulk_update_client", { ids, clientId: clientId ?? "" });
 
 // ── Invoices ───────────────────────────────────────────────────────
 export const previewInvoice = (
@@ -312,6 +341,9 @@ export const getSettings = () => invoke<Settings>("get_settings");
 
 export const updateSetting = (key: string, value: string) =>
   invoke<Settings>("update_setting", { key, value });
+
+export const updateSettingsBatch = (changes: SettingChange[]) =>
+  invoke<Settings>("update_settings_batch", { changes });
 
 export const exportCsv = () => invoke<string>("export_csv");
 

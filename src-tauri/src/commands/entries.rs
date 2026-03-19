@@ -33,6 +33,7 @@ pub struct UpdateEntryArgs {
     pub duration_minutes: Option<i64>,
     pub description: Option<String>,
     pub tag_id: Option<String>,
+    pub client_id: Option<String>,
     pub billable: Option<bool>,
     pub hourly_rate: Option<f64>,
 }
@@ -43,8 +44,20 @@ pub struct ListEntriesArgs {
     pub date_to: Option<String>,
     pub search: Option<String>,
     pub tag_id: Option<String>,
+    pub client_id: Option<String>,
     pub invoiced: Option<bool>,
     pub billable: Option<bool>,
+}
+
+fn normalize_optional_client_id(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 async fn check_overlap(
@@ -117,6 +130,7 @@ pub async fn create_entry(
     let duration = compute_duration(&args.start_time, &args.end_time);
     let tag = get_selectable_tag(pool.inner(), &args.tag_id).await?;
     let billable = args.billable.unwrap_or(true);
+    let client_id = normalize_optional_client_id(args.client_id);
 
     sqlx::query(
         "INSERT INTO time_entries (
@@ -133,7 +147,7 @@ pub async fn create_entry(
     .bind(&args.description)
     .bind(&tag.name)
     .bind(&tag.id)
-    .bind(&args.client_id)
+    .bind(&client_id)
     .bind(billable)
     .bind(args.hourly_rate)
     .bind(&now)
@@ -164,6 +178,10 @@ pub async fn update_entry(
     let start_time = args.start_time.unwrap_or(current.start_time.clone());
     let end_time_val = args.end_time.or(current.end_time.clone());
     let description = args.description.unwrap_or(current.description.clone());
+    let client_id = match args.client_id {
+        Some(next_client_id) => normalize_optional_client_id(Some(next_client_id)),
+        None => current.client_id.clone(),
+    };
     let billable = args.billable.unwrap_or(current.billable);
     let hourly_rate = args.hourly_rate;
 
@@ -191,7 +209,7 @@ pub async fn update_entry(
 
     sqlx::query(
         "UPDATE time_entries
-         SET date = ?, start_time = ?, end_time = ?, duration_minutes = ?, description = ?, entry_type = ?, tag_id = ?, billable = ?, hourly_rate = ?, updated_at = ?
+         SET date = ?, start_time = ?, end_time = ?, duration_minutes = ?, description = ?, entry_type = ?, tag_id = ?, client_id = ?, billable = ?, hourly_rate = ?, updated_at = ?
          WHERE id = ?",
     )
     .bind(&date)
@@ -201,6 +219,7 @@ pub async fn update_entry(
     .bind(&description)
     .bind(&tag.name)
     .bind(&tag.id)
+    .bind(&client_id)
     .bind(billable)
     .bind(hourly_rate)
     .bind(&now)
@@ -325,6 +344,48 @@ pub async fn bulk_update_tag(
 }
 
 #[tauri::command]
+pub async fn bulk_update_client(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+    client_id: String,
+) -> Result<(), String> {
+    let now = now_iso();
+    let normalized_client_id = normalize_optional_client_id(Some(client_id));
+
+    let mut editable_ids: Vec<String> = Vec::new();
+    for id in &ids {
+        let current = fetch_time_entry_by_id(pool.inner(), id).await?;
+        if let Some(ref invoice_id) = current.invoice_id {
+            if ensure_invoice_editable(pool.inner(), invoice_id).await.is_ok() {
+                editable_ids.push(id.clone());
+            }
+        } else {
+            editable_ids.push(id.clone());
+        }
+    }
+
+    if editable_ids.is_empty() {
+        return Ok(());
+    }
+
+    let mut tx = pool.inner().begin().await.map_err(|e| e.to_string())?;
+    for id in &editable_ids {
+        sqlx::query("UPDATE time_entries SET client_id = ?, updated_at = ? WHERE id = ?")
+            .bind(&normalized_client_id)
+            .bind(&now)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "entry-bulk-update-client").await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn list_entries(
     pool: tauri::State<'_, SqlitePool>,
     args: ListEntriesArgs,
@@ -346,6 +407,14 @@ pub async fn list_entries(
     if let Some(ref tag_id) = args.tag_id {
         query.push(" AND time_entries.tag_id = ");
         query.push_bind(tag_id.clone());
+    }
+    if let Some(ref client_id) = args.client_id {
+        if client_id.trim().is_empty() {
+            query.push(" AND time_entries.client_id IS NULL");
+        } else {
+            query.push(" AND time_entries.client_id = ");
+            query.push_bind(client_id.clone());
+        }
     }
     if let Some(invoiced) = args.invoiced {
         query.push(" AND time_entries.invoiced = ");
