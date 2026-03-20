@@ -25,6 +25,7 @@ pub struct Settings {
     pub employer_name: String,
     pub backup_directory: String,
     pub auto_backup_enabled: bool,
+    pub auto_update_enabled: bool,
     pub backup_csv_path: String,
     pub theme: String,
     pub invoice_notes: String,
@@ -289,7 +290,7 @@ async fn ensure_shortcut_bindings(pool: &SqlitePool) -> Result<BTreeMap<String, 
     Ok(migrated)
 }
 
-fn allowed_setting_keys() -> [&'static str; 15] {
+fn allowed_setting_keys() -> [&'static str; 16] {
     [
         "hourly_rate",
         "currency",
@@ -298,6 +299,7 @@ fn allowed_setting_keys() -> [&'static str; 15] {
         "employer_name",
         "backup_directory",
         "auto_backup_enabled",
+        "auto_update_enabled",
         "backup_csv_path",
         "theme",
         "invoice_notes",
@@ -334,6 +336,14 @@ pub async fn get_settings(
             .as_str(),
         "0" | "false" | "off"
     );
+    let auto_update_enabled = !matches!(
+        get_setting_value(pool.inner(), "auto_update_enabled")
+            .await
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "0" | "false" | "off"
+    );
 
     Ok(Settings {
         hourly_rate: get_setting_value(pool.inner(), "hourly_rate").await,
@@ -343,6 +353,7 @@ pub async fn get_settings(
         employer_name: get_setting_value(pool.inner(), "employer_name").await,
         backup_directory,
         auto_backup_enabled,
+        auto_update_enabled,
         backup_csv_path: get_setting_value(pool.inner(), "backup_csv_path").await,
         theme: get_setting_value(pool.inner(), "theme").await,
         invoice_notes: get_setting_value(pool.inner(), "invoice_notes").await,

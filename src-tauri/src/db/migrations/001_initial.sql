@@ -81,6 +81,7 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
     ('employer_name', ''),
     ('backup_directory', ''),
     ('auto_backup_enabled', '1'),
+    ('auto_update_enabled', '1'),
     ('backup_csv_path', ''),
     ('theme', 'dark'),
     ('invoice_notes', 'Payment due within 30 days. Thank you for your business.'),

@@ -99,6 +99,7 @@ export interface Settings {
   employer_name: string;
   backup_directory: string;
   auto_backup_enabled: boolean;
+  auto_update_enabled: boolean;
   backup_csv_path: string;
   theme: string;
   invoice_notes: string;

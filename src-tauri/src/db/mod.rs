@@ -136,6 +136,7 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
         "ALTER TABLE invoice_entry_snapshots ADD COLUMN billed_minutes INTEGER",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('backup_directory', '')",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_backup_enabled', '1')",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_update_enabled', '1')",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('time_rounding', 'none')",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('shortcut_bindings', '{}')",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('command_palette_shortcut', 'mod+k')",

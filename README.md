@@ -78,6 +78,7 @@ Color-coded entry tags with a configurable sort order. Useful for categorizing t
 - Time rounding strategy for billing
 - Invoice footer notes
 - Configurable backup directory
+- In-app stable update checks and installs
 - Theme (dark / light)
 - Fully rebindable keyboard shortcuts
 
@@ -367,7 +368,7 @@ npm run tauri build -- --bundles dmg
 
 ### GitHub Actions
 
-A release workflow is included at `.github/workflows/release.yml`. It triggers on any tag matching `v*` and builds for macOS and Ubuntu (Linux) in parallel, then attaches the installers to a GitHub release.
+A release workflow is included at `.github/workflows/release.yml`. It triggers on any tag matching `v*` and builds for macOS, Ubuntu (Linux), and Windows in parallel, then attaches the installers and updater artifacts to a GitHub release.
 
 To cut a release:
 
@@ -375,6 +376,13 @@ To cut a release:
 git tag v0.2.0
 git push origin v0.2.0
 ```
+
+To enable in-app updates, add these GitHub Actions secrets before shipping a tagged release:
+
+- `TAURI_SIGNING_PRIVATE_KEY` with the contents of your updater private key
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` only if your key is password-protected
+
+This project generated a local gitignored updater key at `.tauri/tock-updater.key`. Keep that file private and backed up; future releases for this app must use the same signing key. Draft GitHub releases remain hidden from the updater until they are published.
 
 ---
 
