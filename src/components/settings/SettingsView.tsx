@@ -15,6 +15,7 @@ import {
   stageRestore,
 } from "../../lib/commands";
 import { type SettingsSection } from "../../lib/navigation";
+import { isMacPlatform } from "../../lib/platform";
 import {
   formatShortcut,
   isSpaceShortcut,
@@ -1090,7 +1091,7 @@ function ShortcutsSettingsSection({
   updateShortcuts: (bindings: Record<string, string>) => Promise<Settings>;
   onShortcutCaptureActiveChange?: (active: boolean) => void;
 }) {
-  const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
+  const isMac = useMemo(() => isMacPlatform(), []);
   const [draft, setDraft] = useState<ShortcutDraftState>(getShortcutDraftFromSettings(settings));
   const [status, setStatus] = useState<StatusMessageState>(null);
   const [saving, setSaving] = useState(false);

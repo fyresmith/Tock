@@ -3,6 +3,7 @@ import { useTimer } from "../../hooks/useTimer";
 import { useClients } from "../../hooks/useClients";
 import { useSettings } from "../../hooks/useSettings";
 import { elapsedSeconds, secondsToHHMMSS, formatTime } from "../../lib/dateUtils";
+import { isMacPlatform } from "../../lib/platform";
 import { formatShortcut } from "../../lib/shortcuts";
 import { getDefaultShortcutBindings, normalizeShortcutBindings } from "../../lib/shortcutRegistry";
 import { Play, Square } from "lucide-react";
@@ -20,7 +21,7 @@ export function TimerView({ onRequestStop }: TimerViewProps) {
   const [recovering, setRecovering] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
-  const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
+  const isMac = useMemo(() => isMacPlatform(), []);
   const shortcutBindings = useMemo(
     () =>
       settings?.shortcut_bindings

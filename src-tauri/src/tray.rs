@@ -9,6 +9,7 @@ use tauri::{
     AppHandle, Emitter, Manager, Wry,
 };
 
+use crate::commands::clients::get_default_client;
 use crate::commands::timer::{discard_timer_impl, start_timer_impl};
 
 const TRAY_ID: &str = "tock-tray";
@@ -29,7 +30,7 @@ pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(tray_icon)
-        .icon_as_template(cfg!(target_os = "macos"))
+        .icon_as_template(false)
         .tooltip("Tock")
         .title("")
         .show_menu_on_left_click(false)
@@ -109,7 +110,12 @@ async fn handle_menu_event(app: AppHandle, id: String) {
     match id.as_str() {
         "start" => {
             let pool = app.state::<SqlitePool>();
-            let _ = start_timer_impl(pool.inner(), &app, None).await;
+            let default_client_id = get_default_client(pool.inner())
+                .await
+                .ok()
+                .flatten()
+                .map(|client| client.id);
+            let _ = start_timer_impl(pool.inner(), &app, default_client_id).await;
         }
         "stop" => {
             show_main_window(&app);

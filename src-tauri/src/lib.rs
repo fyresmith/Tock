@@ -2,6 +2,7 @@ mod backup;
 mod commands;
 mod db;
 mod tray;
+mod window_state;
 
 use tauri::Manager;
 
@@ -42,6 +43,7 @@ pub fn run() {
                     .expect("Failed to initialize database");
                 app_handle.manage(pool);
             });
+            window_state::setup(app);
             tray::setup_tray(app)?;
             Ok(())
         })

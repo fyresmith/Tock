@@ -9,6 +9,7 @@ import { DashboardView } from "./components/dashboard/DashboardView";
 import { InvoicesView } from "./components/invoices/InvoicesView";
 import { SettingsView } from "./components/settings/SettingsView";
 import { StopPrompt } from "./components/timer/StopPrompt";
+import { ProfileSetupPrompt } from "./components/app/ProfileSetupPrompt";
 import { useTimerStore } from "./stores/timerStore";
 import { useSettings } from "./hooks/useSettings";
 import { useTimerSync } from "./hooks/useTimerSync";
@@ -20,7 +21,10 @@ import {
   normalizeShortcutBindings,
   type ShortcutActionId,
 } from "./lib/shortcutRegistry";
+import { isMacPlatform } from "./lib/platform";
 import { eventMatchesShortcut, isEditableTarget } from "./lib/shortcuts";
+
+const PROFILE_SETUP_PROMPT_DISMISSED_KEY = "tock-profile-setup-prompt-dismissed:v1";
 
 export function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
@@ -29,11 +33,18 @@ export function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutCaptureActive, setShortcutCaptureActive] = useState(false);
   const [manualEntryIntent, setManualEntryIntent] = useState(0);
+  const [setupPromptDismissed, setSetupPromptDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(PROFILE_SETUP_PROMPT_DISMISSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const { isRunning, setActiveEntry } = useTimerStore();
   const { settings } = useSettings();
   useTimerSync();
 
-  const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
+  const isMac = useMemo(() => isMacPlatform(), []);
   const shortcutBindings = useMemo(
     () =>
       settings?.shortcut_bindings
@@ -41,6 +52,16 @@ export function App() {
         : getDefaultShortcutBindings(),
     [settings?.shortcut_bindings],
   );
+  const profileSetupIncomplete = useMemo(() => {
+    if (!settings) return false;
+    return [settings.user_name, settings.user_email, settings.employer_name].some(
+      (value) => value.trim() === "",
+    );
+  }, [settings]);
+  const showProfileSetupPrompt =
+    profileSetupIncomplete &&
+    !setupPromptDismissed &&
+    !(currentView === "settings" && settingsSection === "identity");
 
   useEffect(() => {
     if (settings?.theme === "light") {
@@ -49,6 +70,18 @@ export function App() {
       document.documentElement.classList.remove("light");
     }
   }, [settings?.theme]);
+
+  useEffect(() => {
+    if (!settings || profileSetupIncomplete) return;
+
+    try {
+      localStorage.removeItem(PROFILE_SETUP_PROMPT_DISMISSED_KEY);
+    } catch {
+      // Ignore storage failures and fall back to in-memory state.
+    }
+
+    setSetupPromptDismissed(false);
+  }, [profileSetupIncomplete, settings]);
 
   useEffect(() => {
     const unlisten = listen("tray-stop-requested", () => {
@@ -66,6 +99,16 @@ export function App() {
   const navigateToSettings = useCallback((section: SettingsSection) => {
     setSettingsSection(section);
     setCurrentView("settings");
+  }, []);
+
+  const dismissProfileSetupPrompt = useCallback(() => {
+    try {
+      localStorage.setItem(PROFILE_SETUP_PROMPT_DISMISSED_KEY, "1");
+    } catch {
+      // Ignore storage failures and fall back to in-memory state.
+    }
+
+    setSetupPromptDismissed(true);
   }, []);
 
   const openStopPrompt = useCallback(() => {
@@ -260,6 +303,12 @@ export function App() {
         isMac={isMac}
         onClose={() => setCommandPaletteOpen(false)}
       />
+      {showProfileSetupPrompt && (
+        <ProfileSetupPrompt
+          onDismiss={dismissProfileSetupPrompt}
+          onOpenSettings={() => navigateToSettings("identity")}
+        />
+      )}
       {showStop && <StopPrompt onClose={() => setShowStop(false)} />}
     </div>
   );
