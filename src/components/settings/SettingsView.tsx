@@ -24,7 +24,6 @@ import {
 } from "../../lib/shortcuts";
 import {
   SHORTCUT_DEFINITIONS,
-  IMPORTANT_SHORTCUT_ACTION_IDS,
   createShortcutDraft,
   normalizeShortcutBindings,
   type ShortcutActionId,
@@ -383,38 +382,56 @@ function SelectInput({
 
 function ShortcutCaptureButton({
   value,
+  listening,
   isMac,
   onChange,
+  onStartListening,
+  onStopListening,
 }: {
   value: string;
+  listening: boolean;
   isMac: boolean;
   onChange: (value: string) => void;
+  onStartListening: () => void;
+  onStopListening: () => void;
 }) {
-  const [listening, setListening] = useState(false);
-
   return (
     <button
       type="button"
       data-shortcut-recorder="true"
-      onClick={() => setListening(true)}
-      onBlur={() => setListening(false)}
+      aria-pressed={listening}
+      onClick={onStartListening}
+      onBlur={() => {
+        if (listening) {
+          onStopListening();
+        }
+      }}
       onKeyDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
+        if (!listening) {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onStartListening();
+          }
+          return;
+        }
 
         if (event.key === "Escape") {
-          setListening(false);
+          event.preventDefault();
+          event.stopPropagation();
+          onStopListening();
           return;
         }
 
         if (event.key === "Tab") {
-          setListening(false);
+          onStopListening();
           return;
         }
 
         if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          event.stopPropagation();
           onChange("");
-          setListening(false);
+          onStopListening();
           return;
         }
 
@@ -423,19 +440,21 @@ function ShortcutCaptureButton({
           return;
         }
 
+        event.preventDefault();
+        event.stopPropagation();
         onChange(shortcut);
-        setListening(false);
+        onStopListening();
       }}
-      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+      className={`inline-flex min-w-[11rem] items-center justify-between rounded-md border px-2.5 py-1.5 text-left transition-colors ${
         listening
           ? "border-[var(--brand)] bg-[var(--brand-muted)]"
           : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-strong)]"
       }`}
     >
-      <span className="text-sm font-medium text-[var(--text-primary)]">
+      <span className="truncate text-[13px] font-medium text-[var(--text-primary)]">
         {listening ? "Press shortcut…" : formatShortcut(value, isMac)}
       </span>
-      <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+      <span className="ml-3 shrink-0 text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
         {listening ? "Recording" : "Record"}
       </span>
     </button>
@@ -999,88 +1018,65 @@ function AppearanceSettingsSection({
   );
 }
 
-function ShortcutSummaryCard({
-  isMac,
-}: {
-  isMac: boolean;
-}) {
-  return (
-    <SettingsSectionCard
-      title="Default Setup"
-      description="These are the starter shortcuts Tock applies for the most common contractor workflows."
-    >
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {IMPORTANT_SHORTCUT_ACTION_IDS.map((actionId) => {
-          const definition = SHORTCUT_DEFINITIONS.find((item) => item.id === actionId);
-          if (!definition || !definition.defaultShortcut) return null;
-          return (
-            <SettingsStat
-              key={definition.id}
-              label={definition.title}
-              value={formatShortcut(definition.defaultShortcut, isMac)}
-            />
-          );
-        })}
-      </div>
-    </SettingsSectionCard>
-  );
-}
-
 function ShortcutSettingRow({
   definition,
   value,
+  listening,
   isMac,
   error,
   onChange,
+  onStartListening,
+  onStopListening,
 }: {
   definition: (typeof SHORTCUT_DEFINITIONS)[number];
   value: string;
+  listening: boolean;
   isMac: boolean;
   error?: string;
   onChange: (value: string) => void;
+  onStartListening: () => void;
+  onStopListening: () => void;
 }) {
-  const currentLabel = formatShortcut(value, isMac);
-  const defaultLabel = definition.defaultShortcut
-    ? formatShortcut(definition.defaultShortcut, isMac)
-    : "No default";
+  const matchesDefault =
+    normalizeShortcut(value) === normalizeShortcut(definition.defaultShortcut ?? "");
 
   return (
-    <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 xl:max-w-[20rem]">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-[var(--text-primary)]">{definition.title}</p>
-            {!value && <SettingsPill label="Not set" />}
-          </div>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{definition.description}</p>
-          <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
-            Current: <span className="font-medium text-[var(--text-primary)]">{currentLabel}</span>
-            {" · "}
-            Default: <span className="font-medium text-[var(--text-primary)]">{defaultLabel}</span>
-          </p>
-        </div>
+    <div className="px-3 py-2.5">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <p className="min-w-0 text-[13px] font-medium text-[var(--text-primary)]">
+          {definition.title}
+        </p>
 
-        <div className="flex w-full flex-col gap-2 xl:max-w-[24rem]">
-          <ShortcutCaptureButton value={value} isMac={isMac} onChange={onChange} />
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <ShortcutCaptureButton
+            value={value}
+            listening={listening}
+            isMac={isMac}
+            onChange={onChange}
+            onStartListening={onStartListening}
+            onStopListening={onStopListening}
+          />
+          <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={() => onChange("")}
               disabled={!value}
-              className={`${buttonClass("secondary")} disabled:opacity-50`}
+              className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-3)] disabled:opacity-50"
             >
               Clear
             </button>
             <button
+              type="button"
               onClick={() => onChange(definition.defaultShortcut ?? "")}
-              disabled={!definition.defaultShortcut}
-              className={`${buttonClass("ghost")} disabled:opacity-50`}
+              disabled={!definition.defaultShortcut || matchesDefault}
+              className="h-8 rounded-md px-2.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-3)] disabled:opacity-50"
             >
-              Reset to Default
+              Default
             </button>
           </div>
-          {error && <p className="text-xs text-[var(--warning)]">{error}</p>}
         </div>
       </div>
+      {error && <p className="mt-2 text-[11px] text-[var(--warning)]">{error}</p>}
     </div>
   );
 }
@@ -1088,18 +1084,32 @@ function ShortcutSettingRow({
 function ShortcutsSettingsSection({
   settings,
   updateShortcuts,
+  onShortcutCaptureActiveChange,
 }: {
   settings: Settings;
   updateShortcuts: (bindings: Record<string, string>) => Promise<Settings>;
+  onShortcutCaptureActiveChange?: (active: boolean) => void;
 }) {
   const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
   const [draft, setDraft] = useState<ShortcutDraftState>(getShortcutDraftFromSettings(settings));
   const [status, setStatus] = useState<StatusMessageState>(null);
   const [saving, setSaving] = useState(false);
+  const [activeRecorderId, setActiveRecorderId] = useState<ShortcutActionId | null>(null);
 
   useEffect(() => {
     setDraft(getShortcutDraftFromSettings(settings));
+    setActiveRecorderId(null);
   }, [settings.shortcut_bindings]);
+
+  useEffect(() => {
+    onShortcutCaptureActiveChange?.(activeRecorderId !== null);
+  }, [activeRecorderId, onShortcutCaptureActiveChange]);
+
+  useEffect(() => {
+    return () => {
+      onShortcutCaptureActiveChange?.(false);
+    };
+  }, [onShortcutCaptureActiveChange]);
 
   const persistedDraft = useMemo(() => getShortcutDraftFromSettings(settings), [settings]);
   const dirty = SHORTCUT_DEFINITIONS.some(
@@ -1131,6 +1141,7 @@ function ShortcutsSettingsSection({
     setSaving(true);
     try {
       await updateShortcuts(normalizedBindings as Record<string, string>);
+      setActiveRecorderId(null);
       setStatus({ tone: "success", message: "Shortcut settings updated." });
     } catch (e) {
       setStatus({ tone: "danger", message: `Unable to save shortcuts: ${e}` });
@@ -1141,35 +1152,47 @@ function ShortcutsSettingsSection({
 
   const reset = () => {
     setDraft(persistedDraft);
+    setActiveRecorderId(null);
     setStatus(null);
   };
 
   return (
     <div className="space-y-4">
-      <ShortcutSummaryCard isMac={isMac} />
-
       {groupedDefinitions.map(([group, definitions]) => (
-        <SettingsSectionCard
+        <section
           key={group}
-          title={group}
-          description={`Configure the ${group.toLowerCase()} shortcuts you want available globally.`}
+          className="overflow-hidden rounded border border-[var(--border)] bg-[var(--surface-1)]"
         >
-          <div className="space-y-3">
+          <div className="border-b border-[var(--border)] px-3 py-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+              {group}
+            </h3>
+          </div>
+          <div className="divide-y divide-[var(--border)]">
             {definitions.map((definition) => (
               <ShortcutSettingRow
                 key={definition.id}
                 definition={definition}
                 value={draft[definition.id]}
+                listening={activeRecorderId === definition.id}
                 isMac={isMac}
                 error={validationErrors[definition.id]}
+                onStartListening={() => {
+                  setActiveRecorderId(definition.id);
+                  setStatus(null);
+                }}
+                onStopListening={() => {
+                  setActiveRecorderId((current) => (current === definition.id ? null : current));
+                }}
                 onChange={(value) => {
+                  setActiveRecorderId(null);
                   setDraft((current) => ({ ...current, [definition.id]: normalizeShortcut(value) }));
                   setStatus(null);
                 }}
               />
             ))}
           </div>
-        </SettingsSectionCard>
+        </section>
       ))}
 
       <SettingsActionBar
@@ -2051,9 +2074,11 @@ function DataSettingsSection({
 export function SettingsView({
   activeSection,
   onChangeSection,
+  onShortcutCaptureActiveChange,
 }: {
   activeSection: SettingsSection;
   onChangeSection: (section: SettingsSection) => void;
+  onShortcutCaptureActiveChange?: (active: boolean) => void;
 }) {
   const { settings, loading, update, updateMany, updateShortcuts } = useSettings();
 
@@ -2113,7 +2138,11 @@ export function SettingsView({
           )}
 
           {activeSection === "shortcuts" && (
-            <ShortcutsSettingsSection settings={settings} updateShortcuts={updateShortcuts} />
+            <ShortcutsSettingsSection
+              settings={settings}
+              updateShortcuts={updateShortcuts}
+              onShortcutCaptureActiveChange={onShortcutCaptureActiveChange}
+            />
           )}
 
           {activeSection === "clients" && <ClientsSettingsSection />}

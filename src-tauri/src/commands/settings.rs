@@ -8,7 +8,6 @@ use crate::backup;
 const SHORTCUT_BINDINGS_KEY: &str = "shortcut_bindings";
 const ACTION_OPEN_COMMAND_PALETTE: &str = "open-command-palette";
 const ACTION_TOGGLE_TIMER: &str = "toggle-timer";
-const ACTION_STOP_TIMER: &str = "stop-timer";
 const ACTION_OPEN_MANUAL_ENTRY: &str = "open-manual-entry";
 const ACTION_GO_TO_TIMER: &str = "go-to-timer";
 const ACTION_GO_TO_LOG: &str = "go-to-log";
@@ -188,11 +187,10 @@ fn month_key(date: NaiveDate) -> String {
     format!("{:04}-{:02}", date.year(), date.month())
 }
 
-fn known_shortcut_action_ids() -> [&'static str; 10] {
+fn known_shortcut_action_ids() -> [&'static str; 9] {
     [
         ACTION_OPEN_COMMAND_PALETTE,
         ACTION_TOGGLE_TIMER,
-        ACTION_STOP_TIMER,
         ACTION_OPEN_MANUAL_ENTRY,
         ACTION_GO_TO_TIMER,
         ACTION_GO_TO_LOG,
@@ -207,7 +205,6 @@ fn default_shortcut_bindings() -> BTreeMap<String, String> {
     BTreeMap::from([
         (ACTION_OPEN_COMMAND_PALETTE.to_string(), "mod+k".to_string()),
         (ACTION_TOGGLE_TIMER.to_string(), "space".to_string()),
-        (ACTION_STOP_TIMER.to_string(), "mod+enter".to_string()),
         (
             ACTION_OPEN_MANUAL_ENTRY.to_string(),
             "mod+shift+n".to_string(),
@@ -259,7 +256,6 @@ async fn migrated_shortcut_bindings(pool: &SqlitePool) -> BTreeMap<String, Strin
     let legacy_overrides = [
         ("command_palette_shortcut", ACTION_OPEN_COMMAND_PALETTE),
         ("quick_add_entry_shortcut", ACTION_OPEN_MANUAL_ENTRY),
-        ("stop_timer_shortcut", ACTION_STOP_TIMER),
     ];
 
     for (legacy_key, action_id) in legacy_overrides {

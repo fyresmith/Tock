@@ -188,20 +188,29 @@ pub async fn stop_timer(
     pool: tauri::State<'_, SqlitePool>,
     app: tauri::AppHandle,
     entry_id: String,
-    description: String,
-    tag_id: String,
+    description: Option<String>,
+    tag_id: Option<String>,
 ) -> Result<TimeEntry, String> {
     let end_time = now_time();
     let now = now_iso();
 
-    let (_date, start_time): (String, String) =
-        sqlx::query_as("SELECT date, start_time FROM time_entries WHERE id = ?")
-            .bind(&entry_id)
-            .fetch_one(pool.inner())
-            .await
-            .map_err(|e| e.to_string())?;
-
-    let tag = get_selectable_tag(pool.inner(), &tag_id).await?;
+    let current = fetch_time_entry_by_id(pool.inner(), &entry_id).await?;
+    if current.end_time.is_some() {
+        return Ok(current);
+    }
+    let start_time = current.start_time.clone();
+    let description = description.unwrap_or(current.description.clone());
+    let tag = if let Some(ref next_tag_id) = tag_id {
+        if current.tag_id.as_deref() == Some(next_tag_id.as_str()) {
+            crate::commands::tags::get_tag_by_id(pool.inner(), next_tag_id).await?
+        } else {
+            get_selectable_tag(pool.inner(), next_tag_id).await?
+        }
+    } else if let Some(ref current_tag_id) = current.tag_id {
+        crate::commands::tags::get_tag_by_id(pool.inner(), current_tag_id).await?
+    } else {
+        get_default_active_tag(pool.inner()).await?
+    };
     let duration = compute_duration(&start_time, &end_time);
 
     sqlx::query(

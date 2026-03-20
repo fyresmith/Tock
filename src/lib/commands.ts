@@ -209,8 +209,11 @@ export interface DashboardData {
 export const startTimer = (clientId: string | null = null) =>
   invoke<TimeEntry>("start_timer", { clientId });
 
-export const stopTimer = (entryId: string, description: string, tagId: string) =>
-  invoke<TimeEntry>("stop_timer", { entryId, description, tagId });
+export const stopTimer = (
+  entryId: string,
+  description: string | null = null,
+  tagId: string | null = null,
+) => invoke<TimeEntry>("stop_timer", { entryId, description, tagId });
 
 export const getActiveTimer = () => invoke<TimeEntry | null>("get_active_timer");
 

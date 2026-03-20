@@ -27,6 +27,7 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("clients");
   const [showStop, setShowStop] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutCaptureActive, setShortcutCaptureActive] = useState(false);
   const [manualEntryIntent, setManualEntryIntent] = useState(0);
   const { isRunning, setActiveEntry } = useTimerStore();
   const { settings } = useSettings();
@@ -67,25 +68,21 @@ export function App() {
     setCurrentView("settings");
   }, []);
 
+  const openStopPrompt = useCallback(() => {
+    setCurrentView("timer");
+    setShowStop(true);
+  }, []);
+
   const toggleTimer = useCallback(async () => {
     setCurrentView("timer");
     if (isRunning) {
-      setShowStop(true);
+      openStopPrompt();
       return true;
     }
     const entry = await startTimer(null);
     setActiveEntry(entry);
     return true;
-  }, [isRunning, setActiveEntry]);
-
-  const openStopPrompt = useCallback(() => {
-    if (!isRunning) {
-      return false;
-    }
-    setCurrentView("timer");
-    setShowStop(true);
-    return true;
-  }, [isRunning]);
+  }, [isRunning, openStopPrompt, setActiveEntry]);
 
   const runShortcutAction = useCallback(
     async (actionId: ShortcutActionId) => {
@@ -135,7 +132,7 @@ export function App() {
         const title = !isRunning ? "Start Timer" : "Stop Timer";
         const subtitle = !isRunning
           ? "Begin tracking a new session from anywhere."
-          : "Open the stop prompt to describe and save the current session.";
+          : "Stop the timer immediately, then review and save the session details.";
         const icon = !isRunning ? Play : Square;
 
         actions.push({
@@ -176,7 +173,7 @@ export function App() {
 
   const handleKeyDown = useCallback(
     async (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLElement && e.target.dataset.shortcutRecorder === "true") {
+      if (shortcutCaptureActive) {
         return;
       }
 
@@ -187,6 +184,10 @@ export function App() {
         if (inInput && !definition.firesWhileEditing) return false;
         return eventMatchesShortcut(e, binding, isMac);
       });
+
+      if (showStop) {
+        return;
+      }
 
       if (matchedDefinition?.id === "open-command-palette") {
         e.preventDefault();
@@ -215,6 +216,8 @@ export function App() {
       commandPaletteOpen,
       isMac,
       runShortcutAction,
+      shortcutCaptureActive,
+      showStop,
       shortcutBindings,
     ]
   );
@@ -227,7 +230,7 @@ export function App() {
   const renderView = () => {
     switch (currentView) {
       case "timer":
-        return <TimerView />;
+        return <TimerView onRequestStop={openStopPrompt} />;
       case "log":
         return <TimeLogView entryFormIntent={manualEntryIntent} />;
       case "dashboard":
@@ -239,6 +242,7 @@ export function App() {
           <SettingsView
             activeSection={settingsSection}
             onChangeSection={setSettingsSection}
+            onShortcutCaptureActiveChange={setShortcutCaptureActive}
           />
         );
     }

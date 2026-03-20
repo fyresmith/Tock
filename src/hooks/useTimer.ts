@@ -11,14 +11,28 @@ export function useTimer() {
     return entry;
   }, [setActiveEntry]);
 
-  const stop = useCallback(
-    async (description: string, tagId: string) => {
-      if (!activeEntry) return null;
-      const entry = await stopTimer(activeEntry.id, description, tagId);
+  const stopEntry = useCallback(
+    async (
+      entryId: string,
+      options?: { description?: string | null; tagId?: string | null },
+    ) => {
+      const entry = await stopTimer(
+        entryId,
+        options?.description ?? null,
+        options?.tagId ?? null,
+      );
       clear();
       return entry;
     },
-    [activeEntry, clear]
+    [clear],
+  );
+
+  const stop = useCallback(
+    async (description?: string | null, tagId?: string | null) => {
+      if (!activeEntry) return null;
+      return stopEntry(activeEntry.id, { description, tagId });
+    },
+    [activeEntry, stopEntry],
   );
 
   const discard = useCallback(async () => {
@@ -37,5 +51,5 @@ export function useTimer() {
     return entry;
   }, [clear, setActiveEntry]);
 
-  return { activeEntry, isRunning, start, stop, discard, recover };
+  return { activeEntry, isRunning, start, stop, stopEntry, discard, recover };
 }

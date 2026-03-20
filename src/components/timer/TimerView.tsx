@@ -5,18 +5,19 @@ import { useSettings } from "../../hooks/useSettings";
 import { elapsedSeconds, secondsToHHMMSS, formatTime } from "../../lib/dateUtils";
 import { formatShortcut } from "../../lib/shortcuts";
 import { getDefaultShortcutBindings, normalizeShortcutBindings } from "../../lib/shortcutRegistry";
-import { StopPrompt } from "./StopPrompt";
-import { Play, Square, Pause, AlertTriangle } from "lucide-react";
+import { Play, Square } from "lucide-react";
 import { Select } from "../ui/Select";
 
-export function TimerView() {
-  const { activeEntry, isRunning, isPaused, pauseOffset, pausedSince, start, recover, pause, resume } = useTimer();
+interface TimerViewProps {
+  onRequestStop: () => void;
+}
+
+export function TimerView({ onRequestStop }: TimerViewProps) {
+  const { activeEntry, isRunning, start, recover } = useTimer();
   const { activeClients, defaultClient } = useClients();
   const { settings } = useSettings();
   const [elapsed, setElapsed] = useState(0);
-  const [showStop, setShowStop] = useState(false);
   const [recovering, setRecovering] = useState(false);
-  const [crashRecovery, setCrashRecovery] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
@@ -28,7 +29,6 @@ export function TimerView() {
     [settings?.shortcut_bindings],
   );
   const toggleShortcut = shortcutBindings["toggle-timer"] ?? "";
-  const stopShortcut = shortcutBindings["stop-timer"] ?? "";
 
   // Track selected client — default to the default client when clients load
   useEffect(() => {
@@ -41,27 +41,22 @@ export function TimerView() {
   useEffect(() => {
     (async () => {
       setRecovering(true);
-      const recovered = await recover();
-      if (recovered) setCrashRecovery(true);
+      await recover();
       setRecovering(false);
     })();
-  }, []);
+  }, [recover]);
 
   // Live timer
   useEffect(() => {
-    if (!activeEntry || (!isRunning && !isPaused)) {
+    if (!activeEntry || !isRunning) {
       setElapsed(0);
       return;
     }
-    if (isPaused) {
-      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset, pausedSince ?? undefined));
-      return;
-    }
-    const tick = () => setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset));
+    const tick = () => setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [isRunning, isPaused, activeEntry, pauseOffset, pausedSince]);
+  }, [isRunning, activeEntry]);
 
   if (recovering) {
     return (
@@ -73,22 +68,10 @@ export function TimerView() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-10 p-8 relative overflow-hidden">
-      {crashRecovery && activeEntry && (
-        <div className="w-full max-w-sm rounded border border-[var(--warning)] bg-[var(--surface-2)] px-4 py-3 animate-fade-in flex gap-3 items-start">
-          <AlertTriangle size={14} className="text-[var(--warning)] mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs text-[var(--warning)] font-semibold mb-0.5">Session recovered</p>
-            <p className="text-xs text-[var(--text-secondary)]">
-              A timer was running when the app closed. It's been resumed.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Clock */}
       <div className="text-center flex flex-col items-center gap-3">
         <div className="flex items-center justify-center gap-1.5 h-4">
-          {isRunning && !isPaused ? (
+          {isRunning ? (
             <>
               <span
                 className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]"
@@ -96,13 +79,6 @@ export function TimerView() {
               />
               <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--brand)]">
                 Recording
-              </span>
-            </>
-          ) : isPaused ? (
-            <>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--text-muted)]">
-                Paused
               </span>
             </>
           ) : (
@@ -132,7 +108,7 @@ export function TimerView() {
       <div className="flex flex-col items-center gap-4">
         {/* Client */}
         {activeClients.length > 0 && (
-          isRunning || isPaused ? (
+          isRunning ? (
             activeEntry?.client_id ? (
               <p className="text-xs text-[var(--text-muted)]">
                 Client:{" "}
@@ -158,7 +134,7 @@ export function TimerView() {
         )}
 
         {/* Buttons */}
-        {!isRunning && !isPaused ? (
+        {!isRunning ? (
           <button
             onClick={() => start(selectedClientId)}
             className="flex items-center gap-2 px-7 py-2 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-medium text-sm transition-colors"
@@ -167,46 +143,27 @@ export function TimerView() {
             Start Timer
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => isPaused ? resume() : pause()}
-              className="flex items-center gap-2 px-5 py-2 rounded bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] font-medium text-sm transition-colors hover:bg-[var(--surface-3)]"
-            >
-              {isPaused ? (
-                <><Play size={14} fill="currentColor" /> Resume</>
-              ) : (
-                <><Pause size={14} fill="currentColor" /> Pause</>
-              )}
-            </button>
-            <button
-              onClick={() => setShowStop(true)}
-              className="flex items-center gap-2 px-5 py-2 rounded bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] font-medium text-sm transition-colors hover:bg-[var(--surface-3)]"
-            >
-              <Square size={14} fill="currentColor" />
-              Stop
-            </button>
-          </div>
+          <button
+            onClick={onRequestStop}
+            className="flex items-center gap-2 px-5 py-2 rounded bg-[var(--surface-2)] border border-[var(--border-strong)] text-[var(--text-primary)] font-medium text-sm transition-colors hover:bg-[var(--surface-3)]"
+          >
+            <Square size={14} fill="currentColor" />
+            Stop
+          </button>
         )}
 
         {/* Kbd hints */}
         <p className="text-[11px] text-[var(--text-muted)] opacity-60">
           {toggleShortcut ? (
             <>
-              <kbd className="font-mono">{formatShortcut(toggleShortcut, isMac)}</kbd> start/pause
+              <kbd className="font-mono">{formatShortcut(toggleShortcut, isMac)}</kbd> start / stop
             </>
           ) : (
             "No timer toggle shortcut set"
           )}
-          {stopShortcut && (
-            <>
-              {" · "}
-              <kbd className="font-mono">{formatShortcut(stopShortcut, isMac)}</kbd> stop
-            </>
-          )}
         </p>
       </div>
 
-      {showStop && <StopPrompt onClose={() => setShowStop(false)} />}
     </div>
   );
 }

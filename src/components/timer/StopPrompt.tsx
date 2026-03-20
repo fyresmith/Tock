@@ -1,63 +1,121 @@
 import { useState, useEffect, useRef } from "react";
 import { useTimer } from "../../hooks/useTimer";
 import { useTags } from "../../hooks/useTags";
-import { useSettings } from "../../hooks/useSettings";
-import { eventMatchesShortcut, formatShortcut } from "../../lib/shortcuts";
-import { getDefaultShortcutBindings, normalizeShortcutBindings } from "../../lib/shortcutRegistry";
+import { deleteEntry, type TimeEntry, updateEntry } from "../../lib/commands";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
-import { X } from "lucide-react";
+import { AlertCircle, LoaderCircle, X } from "lucide-react";
 
 interface StopPromptProps {
   onClose: () => void;
 }
 
 export function StopPrompt({ onClose }: StopPromptProps) {
-  const { stop, discard, activeEntry } = useTimer();
+  const { activeEntry, recover, stopEntry } = useTimer();
   const { tags, loading: tagsLoading } = useTags();
-  const { settings } = useSettings();
   const [description, setDescription] = useState("");
   const [tagId, setTagId] = useState("");
+  const [draftEntry, setDraftEntry] = useState<TimeEntry | null>(null);
+  const [stopping, setStopping] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [error, setError] = useState("");
+  const initializedRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const selectableTags = getSelectableTags(tags, activeEntry?.tag_id);
-  const isMac = navigator.platform.toUpperCase().includes("MAC");
-  const shortcutBindings = settings?.shortcut_bindings
-    ? normalizeShortcutBindings(settings.shortcut_bindings)
-    : getDefaultShortcutBindings();
-  const stopShortcut = shortcutBindings["stop-timer"] ?? "";
+  const currentTagId = draftEntry?.tag_id ?? activeEntry?.tag_id;
+  const selectableTags = getSelectableTags(tags, currentTagId);
+  const isBusy = stopping || saving || discarding;
 
   useEffect(() => {
+    if (!draftEntry || stopping) return;
     inputRef.current?.focus();
+  }, [draftEntry, stopping]);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    let cancelled = false;
+
+    const finalizeTimer = async () => {
+      setStopping(true);
+      setError("");
+      try {
+        const runningEntry = await recover();
+        if (!runningEntry) {
+          if (!cancelled) onClose();
+          return;
+        }
+
+        const stoppedEntry = await stopEntry(runningEntry.id);
+        if (cancelled) return;
+
+        setDraftEntry(stoppedEntry);
+        setDescription(stoppedEntry.description);
+        setTagId(stoppedEntry.tag_id ?? "");
+      } catch (e) {
+        if (!cancelled) {
+          setError(String(e));
+        }
+      } finally {
+        if (!cancelled) {
+          setStopping(false);
+        }
+      }
+    };
+
+    void finalizeTimer();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (tagId || selectableTags.length === 0) return;
-    setTagId(activeEntry?.tag_id ?? selectableTags[0].id);
-  }, [activeEntry?.tag_id, selectableTags, tagId]);
+    setTagId(currentTagId ?? selectableTags[0].id);
+  }, [currentTagId, selectableTags, tagId]);
 
   const handleStop = async () => {
-    if (!tagId) return;
+    if (!draftEntry || !tagId) return;
     setSaving(true);
+    setError("");
     try {
-      await stop(description, tagId);
+      await updateEntry({
+        id: draftEntry.id,
+        description,
+        tag_id: tagId,
+      });
       onClose();
+    } catch (e) {
+      setError(String(e));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDiscard = async () => {
-    await discard();
-    onClose();
+    if (!draftEntry) return;
+    setDiscarding(true);
+    setError("");
+    try {
+      await deleteEntry(draftEntry.id);
+      onClose();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setDiscarding(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (stopShortcut && eventMatchesShortcut(e.nativeEvent, stopShortcut, isMac)) {
-      e.preventDefault();
-      handleStop();
-      return;
-    }
+    if (isBusy) return;
     if (e.key === "Escape") {
+      onClose();
+    }
+  };
+
+  const handleClose = () => {
+    if (!isBusy) {
       onClose();
     }
   };
@@ -65,7 +123,7 @@ export function StopPrompt({ onClose }: StopPromptProps) {
   return (
     <div
       className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && handleClose()}
     >
       <div
         className="bg-[var(--surface-1)] border border-[var(--border-strong)] rounded w-full max-w-lg p-5 shadow-2xl animate-slide-up"
@@ -77,14 +135,22 @@ export function StopPrompt({ onClose }: StopPromptProps) {
             Stop Timer
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+            disabled={isBusy}
           >
             <X size={14} />
           </button>
         </div>
 
         <div className="space-y-3">
+          {stopping && (
+            <div className="flex items-center gap-2 rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+              <LoaderCircle size={14} className="animate-spin" />
+              Stopping timer…
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">
               What did you work on?
@@ -95,6 +161,7 @@ export function StopPrompt({ onClose }: StopPromptProps) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Implemented login flow, fixed bug #42…"
               rows={4}
+              disabled={isBusy || !draftEntry}
               className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] resize-none focus:border-[var(--brand)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-muted)] transition-colors"
             />
           </div>
@@ -115,35 +182,45 @@ export function StopPrompt({ onClose }: StopPromptProps) {
               </p>
             )}
           </div>
+
+          {draftEntry?.end_time && (
+            <p className="text-xs text-[var(--text-muted)]">
+              Timer stopped at {draftEntry.end_time.slice(0, 5)}.
+            </p>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-[var(--danger)]">
+              <AlertCircle size={13} />
+              {error}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2 mt-5">
           <button
             onClick={handleDiscard}
-            className="px-3 py-1.5 rounded text-sm text-[var(--danger)] hover:bg-[var(--surface-2)] transition-colors"
+            disabled={isBusy || !draftEntry}
+            className="px-3 py-1.5 rounded text-sm text-[var(--danger)] hover:bg-[var(--surface-2)] disabled:opacity-50 transition-colors"
           >
-            Discard
+            {discarding ? "Discarding…" : "Discard"}
           </button>
           <div className="flex-1" />
           <button
-            onClick={onClose}
-            className="px-3 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-2)] transition-colors"
+            onClick={handleClose}
+            disabled={isBusy}
+            className="px-3 py-1.5 rounded text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-2)] disabled:opacity-50 transition-colors"
           >
-            Cancel
+            Close
           </button>
           <button
             onClick={handleStop}
-            disabled={saving || !tagId}
+            disabled={isBusy || !draftEntry || !tagId}
             className="px-4 py-1.5 rounded bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-sm font-medium disabled:opacity-50 transition-colors"
           >
             {saving ? "Saving…" : "Save Entry"}
           </button>
         </div>
-        {stopShortcut && (
-          <p className="text-center text-[10px] text-[var(--text-muted)] mt-2">
-            {formatShortcut(stopShortcut, isMac)} to save
-          </p>
-        )}
       </div>
     </div>
   );

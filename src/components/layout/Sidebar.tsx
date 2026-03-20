@@ -18,25 +18,23 @@ const navItems: { id: View; label: string; icon: React.ElementType }[] = [
 ];
 
 export function Sidebar({ currentView, onNavigate }: SidebarProps) {
-  const { activeEntry, isRunning, isPaused, pauseOffset, pausedSince } = useTimerStore();
+  const { activeEntry, isRunning } = useTimerStore();
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!activeEntry || (!isRunning && !isPaused)) {
+    if (!activeEntry || !isRunning) {
       setElapsed(0);
       return;
     }
-    if (isPaused) {
-      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset, pausedSince ?? undefined));
-      return;
-    }
-    const interval = setInterval(() => {
-      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date, pauseOffset));
-    }, 1000);
+    const tick = () => {
+      setElapsed(elapsedSeconds(activeEntry.start_time, activeEntry.date));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, isPaused, activeEntry, pauseOffset, pausedSince]);
+  }, [isRunning, activeEntry]);
 
-  const timerActive = (isRunning || isPaused) && activeEntry;
+  const timerActive = isRunning && activeEntry;
 
   return (
     <aside className="w-12 flex-shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--surface-1)]" style={{ zIndex: 20 }}>
@@ -66,8 +64,8 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
                 {/* Timer status badge */}
                 {isTimer && timerActive && (
                   <span
-                    className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${isPaused ? "bg-[var(--text-muted)]" : "bg-[var(--brand)]"}`}
-                    style={!isPaused ? { animation: "pulse-dot 1.5s ease-in-out infinite" } : undefined}
+                    className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand)]"
+                    style={{ animation: "pulse-dot 1.5s ease-in-out infinite" }}
                   />
                 )}
               </button>

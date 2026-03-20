@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   PlusCircle,
   Settings2,
-  Square,
   Timer,
   type LucideIcon,
 } from "lucide-react";
@@ -50,7 +49,7 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: "toggle-timer",
     title: "Toggle Timer",
-    description: "Start the timer when idle, or open the stop prompt when a timer is running.",
+    description: "Start the timer when idle, or stop it immediately and open the save prompt when it is running.",
     group: "Timer",
     defaultShortcut: "space",
     allowModifierless: true,
