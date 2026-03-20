@@ -14,7 +14,6 @@ import { normalizeShortcut } from "./shortcuts";
 export type ShortcutActionId =
   | "open-command-palette"
   | "toggle-timer"
-  | "stop-timer"
   | "open-manual-entry"
   | "go-to-timer"
   | "go-to-log"
@@ -51,21 +50,12 @@ export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: "toggle-timer",
     title: "Toggle Timer",
-    description: "Start, pause, or resume the timer depending on its current state.",
+    description: "Start the timer when idle, or open the stop prompt when a timer is running.",
     group: "Timer",
     defaultShortcut: "space",
     allowModifierless: true,
     icon: Timer,
-    keywords: ["start", "pause", "resume"],
-  },
-  {
-    id: "stop-timer",
-    title: "Stop Timer",
-    description: "Open the stop prompt so you can describe and save the current session.",
-    group: "Timer",
-    defaultShortcut: "mod+enter",
-    icon: Square,
-    keywords: ["save entry", "finish", "end timer"],
+    keywords: ["start", "stop", "finish", "save entry"],
   },
   {
     id: "open-manual-entry",
@@ -140,7 +130,6 @@ export const IMPORTANT_SHORTCUT_ACTION_IDS: ShortcutActionId[] = [
   "open-command-palette",
   "toggle-timer",
   "open-manual-entry",
-  "stop-timer",
 ];
 
 export function isShortcutActionId(value: string): value is ShortcutActionId {

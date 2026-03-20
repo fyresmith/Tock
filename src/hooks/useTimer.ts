@@ -3,7 +3,7 @@ import { useTimerStore } from "../stores/timerStore";
 import { startTimer, stopTimer, discardTimer, getActiveTimer } from "../lib/commands";
 
 export function useTimer() {
-  const { activeEntry, isRunning, isPaused, pauseOffset, pausedSince, setActiveEntry, clear, pause, resume } = useTimerStore();
+  const { activeEntry, isRunning, setActiveEntry, clear } = useTimerStore();
 
   const start = useCallback(async (clientId?: string | null) => {
     const entry = await startTimer(clientId ?? null);
@@ -31,9 +31,11 @@ export function useTimer() {
     const entry = await getActiveTimer();
     if (entry) {
       setActiveEntry(entry);
+    } else {
+      clear();
     }
     return entry;
-  }, [setActiveEntry]);
+  }, [clear, setActiveEntry]);
 
-  return { activeEntry, isRunning, isPaused, pauseOffset, pausedSince, start, stop, discard, recover, pause, resume };
+  return { activeEntry, isRunning, start, stop, discard, recover };
 }

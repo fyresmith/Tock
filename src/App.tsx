@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Pause, Play } from "lucide-react";
+import { Play, Square } from "lucide-react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { CommandPalette, type CommandPaletteAction } from "./components/command/CommandPalette";
 import { TimerView } from "./components/timer/TimerView";
@@ -28,7 +28,7 @@ export function App() {
   const [showStop, setShowStop] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [manualEntryIntent, setManualEntryIntent] = useState(0);
-  const { isRunning, isPaused, setActiveEntry, pause, resume } = useTimerStore();
+  const { isRunning, setActiveEntry } = useTimerStore();
   const { settings } = useSettings();
   useTimerSync();
 
@@ -69,39 +69,23 @@ export function App() {
 
   const toggleTimer = useCallback(async () => {
     setCurrentView("timer");
-    if (isPaused) {
-      resume();
-      return true;
-    }
     if (isRunning) {
-      pause();
+      setShowStop(true);
       return true;
     }
     const entry = await startTimer(null);
     setActiveEntry(entry);
     return true;
-  }, [isPaused, isRunning, pause, resume, setActiveEntry]);
+  }, [isRunning, setActiveEntry]);
 
   const openStopPrompt = useCallback(() => {
-    if (!isRunning && !isPaused) {
+    if (!isRunning) {
       return false;
     }
     setCurrentView("timer");
     setShowStop(true);
     return true;
-  }, [isPaused, isRunning]);
-
-  const isShortcutActionAvailable = useCallback(
-    (actionId: ShortcutActionId) => {
-      switch (actionId) {
-        case "stop-timer":
-          return isRunning || isPaused;
-        default:
-          return true;
-      }
-    },
-    [isPaused, isRunning],
-  );
+  }, [isRunning]);
 
   const runShortcutAction = useCallback(
     async (actionId: ShortcutActionId) => {
@@ -111,8 +95,6 @@ export function App() {
           return true;
         case "toggle-timer":
           return toggleTimer();
-        case "stop-timer":
-          return openStopPrompt();
         case "open-manual-entry":
           openManualEntry();
           return true;
@@ -138,7 +120,7 @@ export function App() {
           return false;
       }
     },
-    [navigateToSettings, openManualEntry, openStopPrompt, toggleTimer],
+    [navigateToSettings, openManualEntry, toggleTimer],
   );
 
   const commandPaletteActions = useMemo<CommandPaletteAction[]>(() => {
@@ -149,18 +131,12 @@ export function App() {
         continue;
       }
 
-      if (!isShortcutActionAvailable(definition.id)) {
-        continue;
-      }
-
       if (definition.id === "toggle-timer") {
-        const title = !isRunning && !isPaused ? "Start Timer" : isPaused ? "Resume Timer" : "Pause Timer";
-        const subtitle = !isRunning && !isPaused
+        const title = !isRunning ? "Start Timer" : "Stop Timer";
+        const subtitle = !isRunning
           ? "Begin tracking a new session from anywhere."
-          : isPaused
-            ? "Continue the paused session."
-            : "Pause the active session without stopping it.";
-        const icon = !isRunning && !isPaused ? Play : isPaused ? Play : Pause;
+          : "Open the stop prompt to describe and save the current session.";
+        const icon = !isRunning ? Play : Square;
 
         actions.push({
           id: definition.id,
@@ -194,8 +170,6 @@ export function App() {
     return actions;
   }, [
     isRunning,
-    isPaused,
-    isShortcutActionAvailable,
     runShortcutAction,
     shortcutBindings,
   ]);
@@ -228,7 +202,7 @@ export function App() {
         return;
       }
 
-      if (!matchedDefinition || !isShortcutActionAvailable(matchedDefinition.id)) {
+      if (!matchedDefinition) {
         return;
       }
 
@@ -239,7 +213,6 @@ export function App() {
     },
     [
       commandPaletteOpen,
-      isShortcutActionAvailable,
       isMac,
       runShortcutAction,
       shortcutBindings,
