@@ -9,10 +9,10 @@
   --surface-2: #2e3234;
   --surface-3: #363b3d;
 
-  --brand:              #6e68b8;
-  --brand-hover:        #605ab0;
-  --brand-muted:        rgba(110,104,184,0.14);
-  --brand-muted-border: rgba(110,104,184,0.28);
+  --brand:              #5b8dee;
+  --brand-hover:        #4a7de4;
+  --brand-muted:        rgba(91,141,238,0.14);
+  --brand-muted-border: rgba(91,141,238,0.28);
 
   --text-primary:   #dfe1e3;
   --text-secondary: #8c9196;
@@ -37,10 +37,10 @@
   --surface-2: #e4e4ec;
   --surface-3: #d8d8e4;
 
-  --brand:              #5c57c8;
-  --brand-hover:        #4c48b5;
-  --brand-muted:        rgba(92,87,200,0.10);
-  --brand-muted-border: rgba(92,87,200,0.28);
+  --brand:              #2d70d6;
+  --brand-hover:        #2260c4;
+  --brand-muted:        rgba(45,112,214,0.10);
+  --brand-muted-border: rgba(45,112,214,0.28);
 
   --text-primary:   #18182c;
   --text-secondary: #44446a;
@@ -94,6 +94,35 @@
 ::-webkit-scrollbar-thumb {
   background: var(--surface-3);
   border-radius: 3px;
+}
+
+/* ─── Checkboxes ─────────────────────────────────────────────────── */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  background-color: var(--surface-2);
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.1s, border-color 0.1s;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--brand);
+  border-color: var(--brand);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 3.5l2.5 2.5L9 1' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 9px;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 /* ─── Focus ─────────────────────────────────────────────────────── */

@@ -12,6 +12,7 @@ import { Client, EntryTag, TimeEntry, UpdateEntryArgs } from "../../lib/commands
 import { formatTime, minutesToHHMM } from "../../lib/dateUtils";
 import { TagBadge } from "../tags/TagBadge";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
+import { Select } from "../ui/Select";
 import { Check, Pencil, Trash2 } from "lucide-react";
 
 interface MonthViewProps {
@@ -260,19 +261,18 @@ function DayEntry({
           onChange={(tag_id) => setForm({ ...form, tag_id })}
           className="w-full bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
         />
-        <select
+        <Select
           value={form.client_id}
-          onChange={(event) => setForm({ ...form, client_id: event.target.value })}
+          onChange={(v) => setForm({ ...form, client_id: v })}
+          options={[
+            { value: "", label: "No client" },
+            ...editableClients.map((c) => ({
+              value: c.id,
+              label: c.name + (c.is_archived ? " (archived)" : ""),
+            })),
+          ]}
           className="w-full bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-        >
-          <option value="">No client</option>
-          {editableClients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-              {client.is_archived ? " (archived)" : ""}
-            </option>
-          ))}
-        </select>
+        />
         <div className="flex gap-1 pt-0.5">
           <button
             onClick={handleCancel}

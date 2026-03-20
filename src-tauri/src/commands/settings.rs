@@ -18,6 +18,9 @@ pub struct Settings {
     pub theme: String,
     pub invoice_notes: String,
     pub time_rounding: String,
+    pub command_palette_shortcut: String,
+    pub quick_add_entry_shortcut: String,
+    pub stop_timer_shortcut: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -172,7 +175,7 @@ fn month_key(date: NaiveDate) -> String {
     format!("{:04}-{:02}", date.year(), date.month())
 }
 
-fn allowed_setting_keys() -> [&'static str; 11] {
+fn allowed_setting_keys() -> [&'static str; 14] {
     [
         "hourly_rate",
         "currency",
@@ -185,6 +188,9 @@ fn allowed_setting_keys() -> [&'static str; 11] {
         "theme",
         "invoice_notes",
         "time_rounding",
+        "command_palette_shortcut",
+        "quick_add_entry_shortcut",
+        "stop_timer_shortcut",
     ]
 }
 
@@ -225,6 +231,9 @@ pub async fn get_settings(
         theme: get_setting_value(pool.inner(), "theme").await,
         invoice_notes: get_setting_value(pool.inner(), "invoice_notes").await,
         time_rounding: get_setting_value(pool.inner(), "time_rounding").await,
+        command_palette_shortcut: get_setting_value(pool.inner(), "command_palette_shortcut").await,
+        quick_add_entry_shortcut: get_setting_value(pool.inner(), "quick_add_entry_shortcut").await,
+        stop_timer_shortcut: get_setting_value(pool.inner(), "stop_timer_shortcut").await,
     })
 }
 
@@ -437,18 +446,11 @@ pub async fn get_dashboard_data(
     }
 
     let due_soon_end = today + Duration::days(7);
-    let receivables_row: (
-        Option<f64>,
-        Option<f64>,
-        Option<f64>,
-        i64,
-        i64,
-        i64,
-    ) = sqlx::query_as(
+    let receivables_row: (f64, f64, f64, i64, i64, i64) = sqlx::query_as(
         "SELECT
-            COALESCE(SUM(total_amount), 0) AS unpaid_amount,
-            COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN total_amount ELSE 0 END), 0) AS overdue_amount,
-            COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at >= ? AND due_at <= ? THEN total_amount ELSE 0 END), 0) AS due_soon_amount,
+            COALESCE(SUM(total_amount), 0.0) AS unpaid_amount,
+            COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN total_amount ELSE 0.0 END), 0.0) AS overdue_amount,
+            COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at >= ? AND due_at <= ? THEN total_amount ELSE 0.0 END), 0.0) AS due_soon_amount,
             COUNT(*) AS open_invoice_count,
             COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END), 0) AS overdue_invoice_count,
             COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at >= ? AND due_at <= ? THEN 1 ELSE 0 END), 0) AS due_soon_invoice_count
@@ -469,8 +471,8 @@ pub async fn get_dashboard_data(
     let client_receivables = sqlx::query_as::<_, ClientReceivableRow>(
         "SELECT
             COALESCE(NULLIF(TRIM(client_name), ''), 'Unassigned') AS client_name,
-            COALESCE(SUM(total_amount), 0) AS open_amount,
-            COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN total_amount ELSE 0 END), 0) AS overdue_amount,
+            COALESCE(SUM(total_amount), 0.0) AS open_amount,
+            COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN total_amount ELSE 0.0 END), 0.0) AS overdue_amount,
             COUNT(*) AS invoice_count,
             COALESCE(SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END), 0) AS overdue_count,
             MIN(CASE WHEN due_at IS NOT NULL THEN due_at END) AS next_due_at
@@ -511,9 +513,9 @@ pub async fn get_dashboard_data(
         month_earnings: month_totals.earnings,
         last_month_earnings: last_month_totals.earnings,
         ytd_earnings: ytd_totals.earnings,
-        unpaid_amount: round_currency(receivables_row.0.unwrap_or(0.0)),
-        overdue_amount: round_currency(receivables_row.1.unwrap_or(0.0)),
-        due_soon_amount: round_currency(receivables_row.2.unwrap_or(0.0)),
+        unpaid_amount: round_currency(receivables_row.0),
+        overdue_amount: round_currency(receivables_row.1),
+        due_soon_amount: round_currency(receivables_row.2),
         open_invoice_count: receivables_row.3,
         overdue_invoice_count: receivables_row.4,
         due_soon_invoice_count: receivables_row.5,

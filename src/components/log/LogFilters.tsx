@@ -3,6 +3,7 @@ import { Client, EntryTag, ListEntriesArgs } from "../../lib/commands";
 import { currentMonthRange, formatDate } from "../../lib/dateUtils";
 import { TagBadge } from "../tags/TagBadge";
 import { CalendarDays, Search, X } from "lucide-react";
+import { Select } from "../ui/Select";
 import { DateRangePicker } from "../invoices/DateRangePicker";
 
 interface LogFiltersProps {
@@ -47,9 +48,26 @@ export function LogFilters({ filters, onChange, tags, clients }: LogFiltersProps
     return () => document.removeEventListener("mousedown", handler);
   }, [showPicker]);
 
+  const sep = <div className="w-px h-4 bg-[var(--border-strong)] flex-shrink-0" />;
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Date range picker pill */}
+      {/* Search */}
+      <div className="relative">
+        <Search
+          size={12}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none"
+        />
+        <input
+          type="text"
+          value={filters.search ?? ""}
+          onChange={(e) => update("search", e.target.value || undefined)}
+          placeholder="Search…"
+          className="bg-[var(--surface-2)] border border-[var(--border)] rounded pl-7 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none w-32"
+        />
+      </div>
+
+      {/* Date range picker */}
       <div className="relative" ref={pickerRef}>
         <button
           onClick={() => setShowPicker((v) => !v)}
@@ -59,7 +77,7 @@ export function LogFilters({ filters, onChange, tags, clients }: LogFiltersProps
               : "bg-[var(--surface-2)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
           }`}
         >
-          <CalendarDays size={13} className="flex-shrink-0" />
+          <CalendarDays size={12} className="flex-shrink-0" />
           <span className="font-medium">{dateLabel}</span>
           {hasDateRange && (
             <span
@@ -70,7 +88,7 @@ export function LogFilters({ filters, onChange, tags, clients }: LogFiltersProps
               }}
               className="ml-0.5 rounded-full hover:bg-[var(--brand)]/20 p-0.5 -mr-0.5 cursor-pointer"
             >
-              <X size={11} />
+              <X size={10} />
             </span>
           )}
         </button>
@@ -106,43 +124,29 @@ export function LogFilters({ filters, onChange, tags, clients }: LogFiltersProps
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search
-          size={13}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none"
-        />
-        <input
-          type="text"
-          value={filters.search ?? ""}
-          onChange={(e) => update("search", e.target.value || undefined)}
-          placeholder="Search…"
-          className="bg-[var(--surface-2)] border border-[var(--border)] rounded pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--brand)] focus:outline-none w-36"
-        />
-      </div>
-
-      <select
+      {/* Client */}
+      <Select
         value={activeClient}
-        onChange={(e) => {
-          const value = e.target.value;
+        onChange={(v) =>
           onChange({
             ...filters,
-            client_id: value === "__all__" ? undefined : value === "__none__" ? "" : value,
-          });
-        }}
-        className="bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-1.5 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-      >
-        <option value="__all__">Any client</option>
-        <option value="__none__">No client</option>
-        {clients.map((client) => (
-          <option key={client.id} value={client.id}>
-            {client.name}
-            {client.is_archived ? " (archived)" : ""}
-          </option>
-        ))}
-      </select>
+            client_id: v === "__all__" ? undefined : v === "__none__" ? "" : v,
+          })
+        }
+        options={[
+          { value: "__all__", label: "Any client" },
+          { value: "__none__", label: "No client" },
+          ...clients.map((c) => ({
+            value: c.id,
+            label: c.name + (c.is_archived ? " (archived)" : ""),
+          })),
+        ]}
+        className="bg-[var(--surface-2)] border border-[var(--border)] rounded px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] focus:border-[var(--brand)] focus:outline-none"
+      />
 
-      {/* Type pills */}
+      {sep}
+
+      {/* Tag pills */}
       <div className="flex items-center gap-1">
         {[null, ...activeTags].map((tag) => {
           const active = activeTag === (tag?.id ?? "");
@@ -162,56 +166,45 @@ export function LogFilters({ filters, onChange, tags, clients }: LogFiltersProps
         })}
       </div>
 
-      {/* Invoiced pills */}
-      <div className="flex items-center gap-1">
-        {([
-          { key: "all", label: "All" },
-          { key: "uninvoiced", label: "Uninvoiced" },
-        ] as const).map(({ key, label }) => {
-          const active = activeInvoiced === key;
-          return (
-            <button
-              key={key}
-              onClick={() => update("invoiced", key === "all" ? undefined : false)}
-              className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
-                active
-                  ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
-                  : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      {sep}
 
-      {/* Billable pills */}
+      {/* Invoiced + Billable pills */}
       <div className="flex items-center gap-1">
-        {([
-          { key: "all", label: "All", value: undefined },
-          { key: "billable", label: "Billable", value: true },
-          { key: "non-billable", label: "Non-billable", value: false },
-        ] as const).map(({ key, label, value }) => {
-          const active = activeBillable === key;
-          return (
-            <button
-              key={key}
-              onClick={() => onChange({ ...filters, billable: value })}
-              className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
-                active
-                  ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
-                  : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
+        <button
+          onClick={() => update("invoiced", activeInvoiced === "uninvoiced" ? undefined : false)}
+          className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
+            activeInvoiced === "uninvoiced"
+              ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
+              : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+          }`}
+        >
+          Uninvoiced
+        </button>
+        <button
+          onClick={() => onChange({ ...filters, billable: activeBillable === "billable" ? undefined : true })}
+          className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
+            activeBillable === "billable"
+              ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
+              : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+          }`}
+        >
+          Billable
+        </button>
+        <button
+          onClick={() => onChange({ ...filters, billable: activeBillable === "non-billable" ? undefined : false })}
+          className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
+            activeBillable === "non-billable"
+              ? "border-[var(--brand)] bg-[var(--brand-muted)] text-[var(--brand)]"
+              : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+          }`}
+        >
+          Non-billable
+        </button>
       </div>
 
       <button
         onClick={() => onChange({})}
-        className="px-2.5 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+        className="ml-auto px-2.5 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
       >
         Clear
       </button>

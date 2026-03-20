@@ -7,6 +7,7 @@ import { getSelectableTags, TagSelect } from "../tags/TagSelect";
 import { DatePicker } from "../ui/DatePicker";
 import { TimePicker, TimePickerHandle } from "../ui/TimePicker";
 import { X, AlertCircle } from "lucide-react";
+import { Select } from "../ui/Select";
 
 interface EntryFormProps {
   onAdd: (args: CreateEntryArgs) => Promise<void>;
@@ -143,16 +144,15 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
                 Client
               </label>
-              <select
+              <Select
                 value={form.client_id ?? ""}
-                onChange={(e) => setForm({ ...form, client_id: e.target.value || null })}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-              >
-                <option value="">No client</option>
-                {activeClients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+                onChange={(v) => setForm({ ...form, client_id: v || null })}
+                options={[
+                  { value: "", label: "No client" },
+                  ...activeClients.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm font-medium text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+              />
             </div>
           )}
 
@@ -164,7 +164,7 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
               tags={selectableTags}
               value={form.tag_id}
               onChange={(tag_id) => setForm({ ...form, tag_id })}
-              className="w-full bg-[var(--surface-2)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+              className="w-full bg-[var(--surface-2)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm font-medium text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
             />
           </div>
 
@@ -174,7 +174,6 @@ export function EntryForm({ onAdd, onClose }: EntryFormProps) {
                 type="checkbox"
                 checked={billable}
                 onChange={(e) => setBillable(e.target.checked)}
-                className="rounded"
               />
               Billable
             </label>

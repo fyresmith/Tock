@@ -83,4 +83,8 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
     ('auto_backup_enabled', '1'),
     ('backup_csv_path', ''),
     ('theme', 'dark'),
-    ('invoice_notes', 'Payment due within 30 days. Thank you for your business.');
+    ('invoice_notes', 'Payment due within 30 days. Thank you for your business.'),
+    ('time_rounding', 'none'),
+    ('command_palette_shortcut', 'mod+k'),
+    ('quick_add_entry_shortcut', 'mod+shift+n'),
+    ('stop_timer_shortcut', 'mod+enter');

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTimer } from "../../hooks/useTimer";
 import { useClients } from "../../hooks/useClients";
+import { useSettings } from "../../hooks/useSettings";
 import { elapsedSeconds, secondsToHHMMSS, formatTime } from "../../lib/dateUtils";
+import { DEFAULT_STOP_TIMER_SHORTCUT, formatShortcut } from "../../lib/shortcuts";
 import { StopPrompt } from "./StopPrompt";
-import { openTimerPopup } from "../../lib/commands";
-import { Play, Square, Pause, AlertTriangle, PictureInPicture2 } from "lucide-react";
+import { Play, Square, Pause, AlertTriangle } from "lucide-react";
+import { Select } from "../ui/Select";
 
 export function TimerView() {
   const { activeEntry, isRunning, isPaused, pauseOffset, pausedSince, start, recover, pause, resume } = useTimer();
   const { activeClients, defaultClient } = useClients();
+  const { settings } = useSettings();
   const [elapsed, setElapsed] = useState(0);
   const [showStop, setShowStop] = useState(false);
   const [recovering, setRecovering] = useState(false);
@@ -16,6 +19,7 @@ export function TimerView() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
+  const stopShortcut = settings?.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT;
 
   // Track selected client — default to the default client when clients load
   useEffect(() => {
@@ -60,14 +64,6 @@ export function TimerView() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-10 p-8 relative overflow-hidden">
-      <button
-        onClick={() => openTimerPopup()}
-        className="absolute top-4 right-4 p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
-        title="Pop out timer"
-      >
-        <PictureInPicture2 size={15} />
-      </button>
-
       {crashRecovery && activeEntry && (
         <div className="w-full max-w-sm rounded border border-[var(--warning)] bg-[var(--surface-2)] px-4 py-3 animate-fade-in flex gap-3 items-start">
           <AlertTriangle size={14} className="text-[var(--warning)] mt-0.5 flex-shrink-0" />
@@ -139,16 +135,15 @@ export function TimerView() {
           ) : (
             <div className="flex items-center gap-2">
               <label className="text-xs text-[var(--text-muted)]">Client</label>
-              <select
+              <Select
                 value={selectedClientId ?? ""}
-                onChange={(e) => setSelectedClientId(e.target.value || null)}
-                className="bg-[var(--surface-2)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-              >
-                <option value="">No client</option>
-                {activeClients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+                onChange={(v) => setSelectedClientId(v || null)}
+                options={[
+                  { value: "", label: "No client" },
+                  ...activeClients.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                className="bg-[var(--surface-2)] border border-[var(--border-strong)] rounded pl-2 pr-2 py-1 text-xs font-medium text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none min-w-28"
+              />
             </div>
           )
         )}
@@ -188,7 +183,7 @@ export function TimerView() {
         <p className="text-[11px] text-[var(--text-muted)] opacity-60">
           <kbd className="font-mono">Space</kbd> start/pause
           {" · "}
-          <kbd className="font-mono">{isMac ? "⌘" : "Ctrl"}+↵</kbd> stop
+          <kbd className="font-mono">{formatShortcut(stopShortcut, isMac)}</kbd> stop
         </p>
       </div>
 

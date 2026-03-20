@@ -4,6 +4,7 @@ import { formatDate, formatTime, minutesToHHMM } from "../../lib/dateUtils";
 import { TagBadge } from "../tags/TagBadge";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
 import { Pencil, Trash2, Check } from "lucide-react";
+import { Select } from "../ui/Select";
 
 interface EntryRowProps {
   entry: TimeEntry;
@@ -106,19 +107,18 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, o
           />
         </td>
         <td className="px-4 py-2">
-          <select
+          <Select
             value={form.client_id}
-            onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+            onChange={(v) => setForm({ ...form, client_id: v })}
+            options={[
+              { value: "", label: "No client" },
+              ...editableClients.map((c) => ({
+                value: c.id,
+                label: c.name + (c.is_archived ? " (archived)" : ""),
+              })),
+            ]}
             className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none min-w-32"
-          >
-            <option value="">No client</option>
-            {editableClients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-                {client.is_archived ? " (archived)" : ""}
-              </option>
-            ))}
-          </select>
+          />
         </td>
         <td className="px-4 py-2">
           <div className="flex flex-col gap-1.5">
@@ -169,7 +169,6 @@ export function EntryRow({ entry, tags, clients, onUpdate, onDelete, selected, o
             type="checkbox"
             checked={selected ?? false}
             onChange={() => onToggle(entry.id)}
-            className="rounded"
           />
         )}
       </td>

@@ -39,15 +39,44 @@ const tooltipStyle = {
 export function DashboardView() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { settings } = useSettings();
   const currency = settings?.currency ?? "USD";
 
   useEffect(() => {
-    getDashboardData().then(setData).catch(console.error).finally(() => setLoading(false));
+    setLoading(true);
+    setError(null);
+    getDashboardData()
+      .then(setData)
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(err);
+        setError(message);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) {
+  if (loading) {
     return <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">Loading…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-md rounded border border-[var(--danger)]/20 bg-[var(--surface-1)] px-4 py-3 text-center">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Dashboard unavailable</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
+        No dashboard data yet
+      </div>
+    );
   }
 
   // Derived

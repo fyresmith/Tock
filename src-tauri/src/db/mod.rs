@@ -137,6 +137,9 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('backup_directory', '')",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_backup_enabled', '1')",
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('time_rounding', 'none')",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('command_palette_shortcut', 'mod+k')",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('quick_add_entry_shortcut', 'mod+shift+n')",
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('stop_timer_shortcut', 'mod+enter')",
     ] {
         let _ = sqlx::query(stmt).execute(pool).await;
     }

@@ -2,11 +2,12 @@ use chrono::Local;
 use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::backup;
 use crate::commands::tags::{get_default_active_tag, get_selectable_tag};
+use crate::tray;
 
 pub const TIME_ENTRY_SELECT: &str = "
     time_entries.id,
@@ -95,23 +96,22 @@ struct ActiveTimerSeed {
     tag_id: Option<String>,
 }
 
-#[tauri::command]
-pub async fn start_timer(
-    pool: tauri::State<'_, SqlitePool>,
-    app: tauri::AppHandle,
+pub(crate) async fn start_timer_impl(
+    pool: &SqlitePool,
+    app: &AppHandle,
     client_id: Option<String>,
 ) -> Result<TimeEntry, String> {
     if let Some(existing) = sqlx::query_as::<_, ActiveTimerSeed>(
         "SELECT id, tag_id FROM time_entries WHERE end_time IS NULL ORDER BY created_at DESC LIMIT 1",
     )
-    .fetch_optional(pool.inner())
+    .fetch_optional(pool)
     .await
     .map_err(|e| e.to_string())?
     {
-        return fetch_time_entry_by_id(pool.inner(), &existing.id).await;
+        return fetch_time_entry_by_id(pool, &existing.id).await;
     }
 
-    let default_tag = get_default_active_tag(pool.inner()).await?;
+    let default_tag = get_default_active_tag(pool).await?;
     let id = Uuid::new_v4().to_string();
     let date = now_date();
     let start_time = now_time();
@@ -129,7 +129,7 @@ pub async fn start_timer(
     .bind(&client_id)
     .bind(&now)
     .bind(&now)
-    .execute(pool.inner())
+    .execute(pool)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -152,9 +152,35 @@ pub async fn start_timer(
         billable: true,
         hourly_rate: None,
     };
-    backup::run_auto_backup_if_enabled(pool.inner(), &app, "timer-start").await;
+    backup::run_auto_backup_if_enabled(pool, app, "timer-start").await;
     let _ = app.emit("timer-changed", ());
+    tray::update_tray(app).await;
     Ok(entry)
+}
+
+pub(crate) async fn discard_timer_impl(
+    pool: &SqlitePool,
+    app: &AppHandle,
+    entry_id: String,
+) -> Result<(), String> {
+    sqlx::query("DELETE FROM time_entries WHERE id = ? AND end_time IS NULL")
+        .bind(&entry_id)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    backup::run_auto_backup_if_enabled(pool, app, "timer-discard").await;
+    let _ = app.emit("timer-changed", ());
+    tray::update_tray(app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_timer(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    client_id: Option<String>,
+) -> Result<TimeEntry, String> {
+    start_timer_impl(pool.inner(), &app, client_id).await
 }
 
 #[tauri::command]
@@ -196,6 +222,7 @@ pub async fn stop_timer(
 
     backup::run_auto_backup_if_enabled(pool.inner(), &app, "timer-stop").await;
     let _ = app.emit("timer-changed", ());
+    tray::update_tray(&app).await;
     fetch_time_entry_by_id(pool.inner(), &entry_id).await
 }
 
@@ -219,29 +246,5 @@ pub async fn discard_timer(
     app: tauri::AppHandle,
     entry_id: String,
 ) -> Result<(), String> {
-    sqlx::query("DELETE FROM time_entries WHERE id = ? AND end_time IS NULL")
-        .bind(&entry_id)
-        .execute(pool.inner())
-        .await
-        .map_err(|e| e.to_string())?;
-    backup::run_auto_backup_if_enabled(pool.inner(), &app, "timer-discard").await;
-    let _ = app.emit("timer-changed", ());
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn open_timer_popup(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("timer-popup") {
-        let _ = w.show();
-        let _ = w.set_focus();
-        return Ok(());
-    }
-    WebviewWindowBuilder::new(&app, "timer-popup", WebviewUrl::App("index.html".into()))
-        .title("Timer")
-        .inner_size(280.0, 280.0)
-        .resizable(false)
-        .always_on_top(true)
-        .build()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    discard_timer_impl(pool.inner(), &app, entry_id).await
 }

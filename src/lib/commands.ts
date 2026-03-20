@@ -103,6 +103,9 @@ export interface Settings {
   theme: string;
   invoice_notes: string;
   time_rounding: string;
+  command_palette_shortcut: string;
+  quick_add_entry_shortcut: string;
+  stop_timer_shortcut: string;
 }
 
 export interface SettingChange {
@@ -212,8 +215,6 @@ export const getActiveTimer = () => invoke<TimeEntry | null>("get_active_timer")
 
 export const discardTimer = (entryId: string) =>
   invoke<void>("discard_timer", { entryId });
-
-export const openTimerPopup = () => invoke<void>("open_timer_popup");
 
 // ── Entries ────────────────────────────────────────────────────────
 export interface CreateEntryArgs {

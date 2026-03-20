@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEntries } from "../../hooks/useEntries";
 import { useTags } from "../../hooks/useTags";
 import { useClients } from "../../hooks/useClients";
@@ -14,12 +14,13 @@ import {
 } from "../../lib/commands";
 import { minutesToHHMM, currentMonthRange } from "../../lib/dateUtils";
 import { Plus, ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
+import { Select } from "../ui/Select";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { getSelectableTags } from "../tags/TagSelect";
 
 type ViewMode = "list" | "month";
 
-export function TimeLogView() {
+export function TimeLogView({ entryFormIntent = 0 }: { entryFormIntent?: number }) {
   const { entries, loading, error, load, add, update, remove } = useEntries();
   const { tags } = useTags();
   const { clients, activeClients } = useClients();
@@ -34,6 +35,7 @@ export function TimeLogView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState("");
   const [bulkClientId, setBulkClientId] = useState("");
+  const handledIntentRef = useRef<number | null>(null);
 
   // Load entries whenever filters or calendar month changes
   useEffect(() => {
@@ -50,6 +52,15 @@ export function TimeLogView() {
       });
     }
   }, [calendarMonth, viewMode]);
+
+  useEffect(() => {
+    if (!entryFormIntent || handledIntentRef.current === entryFormIntent) {
+      return;
+    }
+    handledIntentRef.current = entryFormIntent;
+    setViewMode("list");
+    setShowForm(true);
+  }, [entryFormIntent]);
 
   // Switch view modes
   const handleSetViewMode = (mode: ViewMode) => {
@@ -119,11 +130,6 @@ export function TimeLogView() {
     }
   };
 
-  const dateRange =
-    filters.date_from && filters.date_to
-      ? `${filters.date_from} – ${filters.date_to}`
-      : null;
-
   const goToPrevMonth = () => setCalendarMonth((m) => subMonths(m, 1));
   const goToNextMonth = () => setCalendarMonth((m) => addMonths(m, 1));
   const goToToday    = () => setCalendarMonth(new Date());
@@ -133,16 +139,39 @@ export function TimeLogView() {
       {/* ── Header ── */}
       <div className="px-5 py-3 border-b border-[var(--border)] bg-[var(--surface-1)]">
         <div className="flex items-center justify-between mb-2.5">
-          <div>
-            <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Time Log</h1>
-            {viewMode === "list" && (
-              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                {entries.length > 0
-                  ? `${entries.length} entries · ${minutesToHHMM(totalMinutes)}${dateRange ? ` · ${dateRange}` : ""}`
-                  : dateRange ?? "All entries"}
-              </p>
-            )}
-          </div>
+          {/* Stats / month nav */}
+          {viewMode === "list" ? (
+            <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+              <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">Time Log</h1>
+              {entries.length > 0
+                ? `${entries.length} entr${entries.length === 1 ? "y" : "ies"} · ${minutesToHHMM(totalMinutes)}`
+                : "No entries"}
+            </p>
+          ) : (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={goToPrevMonth}
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-xs font-medium text-[var(--text-primary)] w-28 text-center">
+                {format(calendarMonth, "MMMM yyyy")}
+              </span>
+              <button
+                onClick={goToNextMonth}
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+              >
+                <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={goToToday}
+                className="ml-1 px-2 py-0.5 rounded text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors border border-[var(--border)]"
+              >
+                Today
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             {/* View toggle */}
@@ -172,36 +201,8 @@ export function TimeLogView() {
           </div>
         </div>
 
-        {/* List mode: filters */}
         {viewMode === "list" && (
           <LogFilters filters={filters} onChange={setFilters} tags={tags} clients={clients} />
-        )}
-
-        {/* Month mode: month nav */}
-        {viewMode === "month" && (
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={goToPrevMonth}
-              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="text-xs font-medium text-[var(--text-primary)] w-32 text-center">
-              {format(calendarMonth, "MMMM yyyy")}
-            </span>
-            <button
-              onClick={goToNextMonth}
-              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
-            >
-              <ChevronRight size={14} />
-            </button>
-            <button
-              onClick={goToToday}
-              className="ml-1 px-2 py-0.5 rounded text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors border border-[var(--border)]"
-            >
-              Today
-            </button>
-          </div>
         )}
       </div>
 
@@ -232,9 +233,9 @@ export function TimeLogView() {
           <p className="text-xs">Adjust filters or add a manual entry</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 flex flex-col min-h-0">
           {selectedIds.size > 0 && (
-            <div className="flex items-center gap-3 px-4 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] text-xs sticky top-0 z-20">
+            <div className="flex items-center gap-3 px-4 py-2 bg-[var(--surface-2)] border-b border-[var(--border)] text-xs flex-shrink-0">
               <span className="text-[var(--text-secondary)] font-medium">{selectedIds.size} selected</span>
               <button
                 onClick={handleBulkDelete}
@@ -243,16 +244,13 @@ export function TimeLogView() {
                 Delete
               </button>
               <div className="flex items-center gap-1.5">
-                <select
+                <Select
                   value={bulkTagId}
-                  onChange={(e) => setBulkTagId(e.target.value)}
-                  className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-                >
-                  <option value="">Pick tag…</option>
-                  {selectableTags.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  onChange={setBulkTagId}
+                  placeholder="Pick tag…"
+                  options={selectableTags.map((t) => ({ value: t.id, label: t.name }))}
+                  className="bg-[var(--surface-2)] border border-[var(--border-strong)] rounded px-2 py-1 text-xs font-medium text-[var(--text-secondary)] focus:border-[var(--brand)] focus:outline-none"
+                />
                 <button
                   onClick={handleBulkRetag}
                   disabled={!bulkTagId}
@@ -262,19 +260,16 @@ export function TimeLogView() {
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
-                <select
+                <Select
                   value={bulkClientId}
-                  onChange={(e) => setBulkClientId(e.target.value)}
-                  className="bg-[var(--surface-1)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
-                >
-                  <option value="">Pick client…</option>
-                  <option value="__none__">No client</option>
-                  {activeClients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setBulkClientId}
+                  placeholder="Pick client…"
+                  options={[
+                    { value: "__none__", label: "No client" },
+                    ...activeClients.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                  className="bg-[var(--surface-2)] border border-[var(--border-strong)] rounded px-2 py-1 text-xs font-medium text-[var(--text-secondary)] focus:border-[var(--brand)] focus:outline-none"
+                />
                 <button
                   onClick={handleBulkReassignClient}
                   disabled={!bulkClientId}
@@ -291,15 +286,15 @@ export function TimeLogView() {
               </button>
             </div>
           )}
+          <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-[var(--surface-0)] z-10 border-b border-[var(--border)] shadow-[0_2px_6px_rgba(0,0,0,0.2)]">
               <tr>
-                <th className="px-4 py-2.5">
+                <th className="px-4 py-2.5 text-left">
                   <input
                     type="checkbox"
                     checked={selectedIds.size === entries.length && entries.length > 0}
                     onChange={toggleSelectAll}
-                    className="rounded"
                   />
                 </th>
                 {["Date", "Time", "Description", "Type", "Client", "Duration", ""].map((col) => (
@@ -327,6 +322,7 @@ export function TimeLogView() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

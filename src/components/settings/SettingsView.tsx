@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { useTags } from "../../hooks/useTags";
 import { useClients } from "../../hooks/useClients";
@@ -14,21 +14,30 @@ import {
   restartApp,
   stageRestore,
 } from "../../lib/commands";
+import { type SettingsSection } from "../../lib/navigation";
+import {
+  DEFAULT_COMMAND_PALETTE_SHORTCUT,
+  DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
+  DEFAULT_STOP_TIMER_SHORTCUT,
+  formatShortcut,
+  normalizeShortcut,
+  shortcutFromEvent,
+} from "../../lib/shortcuts";
 import { formatCurrency } from "../../lib/dateUtils";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { TagBadge } from "../tags/TagBadge";
+import { Select } from "../ui/Select";
 import {
   Briefcase,
   Database,
   DollarSign,
+  Keyboard,
   Palette,
   Tags,
   User,
   type LucideIcon,
 } from "lucide-react";
-
-type Section = "clients" | "billing" | "identity" | "appearance" | "tags" | "data";
 type StatusTone = "muted" | "success" | "danger" | "warning";
 
 type StatusMessageState = {
@@ -37,7 +46,7 @@ type StatusMessageState = {
 } | null;
 
 const NAV_ITEMS: Array<{
-  id: Section;
+  id: SettingsSection;
   label: string;
   icon: LucideIcon;
   eyebrow: string;
@@ -70,6 +79,13 @@ const NAV_ITEMS: Array<{
     icon: Palette,
     eyebrow: "Chrome",
     description: "Choose how the desktop app looks without affecting the appearance of exported invoices.",
+  },
+  {
+    id: "shortcuts",
+    label: "Shortcuts",
+    icon: Keyboard,
+    eyebrow: "Command Palette",
+    description: "Customize the shortcuts that open your command palette, quick-add manual entries, and stop the active timer.",
   },
   {
     id: "tags",
@@ -185,7 +201,7 @@ function SettingsSectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-[0_1px_0_rgba(255,255,255,0.02)]">
+    <section className="rounded border border-[var(--border)] bg-[var(--surface-1)] p-4 shadow-[0_1px_0_rgba(255,255,255,0.02)]">
       <div className="mb-4">
         <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
         {description && <p className="mt-1 text-xs text-[var(--text-muted)]">{description}</p>}
@@ -218,7 +234,7 @@ function SettingsField({
 function SettingsStatusMessage({ status }: { status: StatusMessageState }) {
   if (!status) return null;
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs ${toneClass(status.tone)}`}>
+    <div className={`rounded border px-3 py-2 text-xs ${toneClass(status.tone)}`}>
       {status.message}
     </div>
   );
@@ -241,7 +257,7 @@ function SettingsActionBar({
 }) {
   if (!dirty && !status) return null;
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-4 py-3">
+    <div className="rounded border border-[var(--border)] bg-[var(--surface-1)] px-4 py-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-h-[20px]">
           <SettingsStatusMessage status={status} />
@@ -274,7 +290,7 @@ function SettingsEmptyState({
   message: string;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-5 text-center">
+    <div className="rounded border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-5 text-center">
       <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>
       <p className="mt-1 text-xs text-[var(--text-muted)]">{message}</p>
     </div>
@@ -289,7 +305,7 @@ function SettingsStat({
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+    <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
       <p className="text-[9px] font-semibold tracking-[0.18em] uppercase text-[var(--text-muted)]">
         {label}
       </p>
@@ -343,20 +359,77 @@ function TextInput({
 function SelectInput({
   value,
   onChange,
-  children,
+  options,
 }: {
   value: string;
   onChange: (value: string) => void;
-  children: ReactNode;
+  options: { value: string; label: string }[];
 }) {
   return (
-    <select
+    <Select
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={onChange}
+      options={options}
       className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--brand)] focus:outline-none"
+    />
+  );
+}
+
+function ShortcutRecorderInput({
+  value,
+  defaultValue,
+  isMac,
+  onChange,
+}: {
+  value: string;
+  defaultValue: string;
+  isMac: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [listening, setListening] = useState(false);
+
+  return (
+    <button
+      type="button"
+      data-shortcut-recorder="true"
+      onClick={() => setListening(true)}
+      onBlur={() => setListening(false)}
+      onKeyDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (event.key === "Escape") {
+          setListening(false);
+          return;
+        }
+
+        if (event.key === "Backspace" || event.key === "Delete") {
+          onChange(defaultValue);
+          setListening(false);
+          return;
+        }
+
+        const shortcut = shortcutFromEvent(event.nativeEvent, isMac);
+        if (!shortcut) {
+          return;
+        }
+
+        onChange(shortcut);
+        setListening(false);
+      }}
+      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+        listening
+          ? "border-[var(--brand)] bg-[var(--brand-muted)]"
+          : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-strong)]"
+      }`}
     >
-      {children}
-    </select>
+      <span className="text-sm font-medium text-[var(--text-primary)]">
+        {listening ? "Press shortcut…" : formatShortcut(value, isMac)}
+      </span>
+      <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        {listening ? "Recording" : "Record"}
+      </span>
+    </button>
   );
 }
 
@@ -466,13 +539,8 @@ function BillingSettingsSection({
                   setDraft((current) => ({ ...current, currency: value }));
                   setStatus(null);
                 }}
-              >
-                {CURRENCY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </SelectInput>
+                options={CURRENCY_OPTIONS}
+              />
             </SettingsField>
 
             <SettingsField
@@ -485,13 +553,8 @@ function BillingSettingsSection({
                   setDraft((current) => ({ ...current, time_rounding: value }));
                   setStatus(null);
                 }}
-              >
-                {ROUNDING_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </SelectInput>
+                options={ROUNDING_OPTIONS}
+              />
             </SettingsField>
           </div>
         </SettingsSectionCard>
@@ -513,7 +576,7 @@ function BillingSettingsSection({
               />
             </SettingsField>
 
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
                 Footer Preview
               </p>
@@ -660,7 +723,7 @@ function IdentitySettingsSection({
           description="A compact preview of how sender and fallback recipient blocks will read."
         >
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
                 From
               </p>
@@ -672,7 +735,7 @@ function IdentitySettingsSection({
               </p>
             </div>
 
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
                 Fallback To
               </p>
@@ -730,21 +793,21 @@ function ThemePreviewTile({
   return (
     <button
       onClick={onClick}
-      className={`rounded-xl border p-3 text-left transition-colors ${
+      className={`rounded border p-3 text-left transition-colors ${
         active
           ? "border-[var(--brand-muted-border)] bg-[var(--brand-muted)]"
           : "border-[var(--border)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
       }`}
     >
       <div
-        className="rounded-lg border p-2"
+        className="rounded border p-2"
         style={{
           background: palette.surface0,
           borderColor: theme === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.08)",
         }}
       >
         <div
-          className="rounded-md border px-2 py-2"
+          className="rounded border px-2 py-2"
           style={{
             background: palette.surface1,
             borderColor: theme === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.08)",
@@ -758,7 +821,7 @@ function ThemePreviewTile({
             <div className="h-5 w-5 rounded-full" style={{ background: palette.brand }} />
           </div>
           <div
-            className="mt-3 rounded-md border px-2 py-1.5"
+            className="mt-3 rounded border px-2 py-1.5"
             style={{
               background: palette.surface2,
               borderColor: theme === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.08)",
@@ -855,7 +918,7 @@ function AppearanceSettingsSection({
         title="About This Setting"
         description="Appearance is purely local to the desktop app."
       >
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
+        <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
           <p className="text-sm text-[var(--text-secondary)]">
             Theme changes affect navigation, dashboards, settings, and working screens inside Tock.
             They do not change the look of invoice PDFs you send to clients.
@@ -867,6 +930,212 @@ function AppearanceSettingsSection({
         dirty={dirty}
         saving={saving}
         status={status}
+        onSave={save}
+        onReset={reset}
+      />
+    </div>
+  );
+}
+
+function ShortcutsSettingsSection({
+  settings,
+  updateMany,
+}: {
+  settings: Settings;
+  updateMany: (changes: Array<{ key: string; value: string }>) => Promise<Settings>;
+}) {
+  const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
+  const [draft, setDraft] = useState({
+    command_palette_shortcut:
+      settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT,
+    quick_add_entry_shortcut:
+      settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
+    stop_timer_shortcut: settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT,
+  });
+  const [status, setStatus] = useState<StatusMessageState>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft({
+      command_palette_shortcut:
+        settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT,
+      quick_add_entry_shortcut:
+        settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
+      stop_timer_shortcut: settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT,
+    });
+  }, [
+    settings.command_palette_shortcut,
+    settings.quick_add_entry_shortcut,
+    settings.stop_timer_shortcut,
+  ]);
+
+  const dirty =
+    draft.command_palette_shortcut !==
+      (settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT) ||
+    draft.quick_add_entry_shortcut !==
+      (settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT) ||
+    draft.stop_timer_shortcut !== (settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT);
+
+  const normalizedShortcuts = [
+    normalizeShortcut(draft.command_palette_shortcut),
+    normalizeShortcut(draft.quick_add_entry_shortcut),
+    normalizeShortcut(draft.stop_timer_shortcut),
+  ];
+  const uniqueShortcutCount = new Set(normalizedShortcuts).size;
+  const hasDuplicateShortcuts = uniqueShortcutCount !== normalizedShortcuts.length;
+
+  const save = async () => {
+    if (hasDuplicateShortcuts) {
+      setStatus({
+        tone: "danger",
+        message: "Each shortcut needs its own unique key combination.",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateMany([
+        { key: "command_palette_shortcut", value: draft.command_palette_shortcut },
+        { key: "quick_add_entry_shortcut", value: draft.quick_add_entry_shortcut },
+        { key: "stop_timer_shortcut", value: draft.stop_timer_shortcut },
+      ]);
+      setStatus({ tone: "success", message: "Shortcut settings updated." });
+    } catch (e) {
+      setStatus({ tone: "danger", message: `Unable to save shortcuts: ${e}` });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => {
+    setDraft({
+      command_palette_shortcut:
+        settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT,
+      quick_add_entry_shortcut:
+        settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
+      stop_timer_shortcut: settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT,
+    });
+    setStatus(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <SettingsStat
+          label="Palette"
+          value={formatShortcut(draft.command_palette_shortcut, isMac)}
+        />
+        <SettingsStat
+          label="Quick Add"
+          value={formatShortcut(draft.quick_add_entry_shortcut, isMac)}
+        />
+        <SettingsStat
+          label="Stop Timer"
+          value={formatShortcut(draft.stop_timer_shortcut, isMac)}
+        />
+      </div>
+
+      <SettingsSectionCard
+        title="Command Palette"
+        description="Open the palette from anywhere, then search for navigation targets and quick actions."
+      >
+        <div className="grid gap-4">
+          <SettingsField
+            label="Open command palette"
+            description="Use this to bring up the searchable action list."
+          >
+            <ShortcutRecorderInput
+              value={draft.command_palette_shortcut}
+              defaultValue={DEFAULT_COMMAND_PALETTE_SHORTCUT}
+              isMac={isMac}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, command_palette_shortcut: value }));
+                setStatus(null);
+              }}
+            />
+          </SettingsField>
+
+          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <p className="text-sm text-[var(--text-secondary)]">
+              Search actions like “time log”, “dashboard”, “stop timer”, or “keyboard shortcuts”.
+            </p>
+          </div>
+        </div>
+      </SettingsSectionCard>
+
+      <SettingsSectionCard
+        title="Quick Actions"
+        description="Give your most common contractor workflows a single shortcut."
+      >
+        <div className="grid gap-4">
+          <SettingsField
+            label="Open manual time entry"
+            description="Navigates to the time log and opens the manual entry sheet right away."
+          >
+            <ShortcutRecorderInput
+              value={draft.quick_add_entry_shortcut}
+              defaultValue={DEFAULT_QUICK_ADD_ENTRY_SHORTCUT}
+              isMac={isMac}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, quick_add_entry_shortcut: value }));
+                setStatus(null);
+              }}
+            />
+          </SettingsField>
+
+          <SettingsField
+            label="Stop current timer"
+            description="Opens the stop prompt so you can describe and save the active session."
+          >
+            <ShortcutRecorderInput
+              value={draft.stop_timer_shortcut}
+              defaultValue={DEFAULT_STOP_TIMER_SHORTCUT}
+              isMac={isMac}
+              onChange={(value) => {
+                setDraft((current) => ({ ...current, stop_timer_shortcut: value }));
+                setStatus(null);
+              }}
+            />
+          </SettingsField>
+        </div>
+      </SettingsSectionCard>
+
+      <SettingsSectionCard
+        title="Built-In Shortcuts"
+        description="These stay fixed for now so the app keeps a dependable baseline."
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+              Timer
+            </p>
+            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">Space</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Start, pause, or resume the timer when you are not typing in a field.</p>
+          </div>
+          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3 md:col-span-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+              Navigation
+            </p>
+            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
+              {isMac ? "Cmd" : "Ctrl"} + 1-5
+            </p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Jump directly to Timer, Time Log, Dashboard, Invoices, or Settings from anywhere in the app.
+            </p>
+          </div>
+        </div>
+      </SettingsSectionCard>
+
+      <SettingsActionBar
+        dirty={dirty}
+        saving={saving}
+        saveDisabled={hasDuplicateShortcuts}
+        status={
+          hasDuplicateShortcuts && !status
+            ? { tone: "warning", message: "Two actions are sharing the same shortcut right now." }
+            : status
+        }
         onSave={save}
         onReset={reset}
       />
@@ -977,7 +1246,7 @@ function ClientCard({
   const billingReady = !!client.billing_email;
   return (
     <div
-      className={`rounded-xl border px-4 py-3 transition-colors ${
+      className={`rounded border px-4 py-3 transition-colors ${
         editing
           ? "border-[var(--brand-muted-border)] bg-[var(--brand-muted)]"
           : "border-[var(--border)] bg-[var(--surface-1)]"
@@ -1240,7 +1509,7 @@ function TagEditorCard({
       }
     >
       <div className="space-y-4">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+        <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
             Live Preview
           </p>
@@ -1314,7 +1583,7 @@ function TagCard({
 }) {
   return (
     <div
-      className={`rounded-xl border px-4 py-3 transition-colors ${
+      className={`rounded border px-4 py-3 transition-colors ${
         editing
           ? "border-[var(--brand-muted-border)] bg-[var(--brand-muted)]"
           : "border-[var(--border)] bg-[var(--surface-1)]"
@@ -1625,7 +1894,7 @@ function DataSettingsSection({
         <div className="space-y-4">
           <SettingsField label="Backup folder">
             <div className="flex items-center gap-2">
-              <span className="flex-1 truncate rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
+              <span className="flex-1 truncate rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
                 {settings.backup_directory}
               </span>
               <button onClick={handlePickBackupDirectory} className={buttonClass("secondary")}>
@@ -1680,7 +1949,7 @@ function DataSettingsSection({
             {backups.slice(0, 8).map((backup) => (
               <div
                 key={backup.path}
-                className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-secondary)]"
+                className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-secondary)]"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-[var(--text-primary)]">{backup.file_name}</span>
@@ -1710,7 +1979,7 @@ function DataSettingsSection({
         <div className="space-y-4">
           <SettingsField label="CSV export path">
             <div className="flex items-center gap-2">
-              <span className="flex-1 truncate rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
+              <span className="flex-1 truncate rounded border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text-muted)]">
                 {settings.backup_csv_path || "Default (app data)"}
               </span>
               <button onClick={handlePickCsvPath} className={buttonClass("secondary")}>
@@ -1731,9 +2000,14 @@ function DataSettingsSection({
   );
 }
 
-export function SettingsView() {
+export function SettingsView({
+  activeSection,
+  onChangeSection,
+}: {
+  activeSection: SettingsSection;
+  onChangeSection: (section: SettingsSection) => void;
+}) {
   const { settings, loading, update, updateMany } = useSettings();
-  const [activeSection, setActiveSection] = useState<Section>("clients");
 
   if (loading || !settings) {
     return (
@@ -1753,7 +2027,7 @@ export function SettingsView() {
           return (
             <button
               key={id}
-              onClick={() => setActiveSection(id)}
+              onClick={() => onChangeSection(id)}
               className={`relative w-full flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-medium text-left transition-colors ${
                 active
                   ? "bg-[var(--surface-3)] text-[var(--text-primary)]"
@@ -1788,6 +2062,10 @@ export function SettingsView() {
 
           {activeSection === "appearance" && (
             <AppearanceSettingsSection settings={settings} updateMany={updateMany} />
+          )}
+
+          {activeSection === "shortcuts" && (
+            <ShortcutsSettingsSection settings={settings} updateMany={updateMany} />
           )}
 
           {activeSection === "clients" && <ClientsSettingsSection />}

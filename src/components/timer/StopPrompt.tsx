@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useTimer } from "../../hooks/useTimer";
 import { useTags } from "../../hooks/useTags";
+import { useSettings } from "../../hooks/useSettings";
+import {
+  DEFAULT_STOP_TIMER_SHORTCUT,
+  eventMatchesShortcut,
+  formatShortcut,
+} from "../../lib/shortcuts";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
 import { X } from "lucide-react";
 
@@ -11,11 +17,14 @@ interface StopPromptProps {
 export function StopPrompt({ onClose }: StopPromptProps) {
   const { stop, discard, activeEntry } = useTimer();
   const { tags, loading: tagsLoading } = useTags();
+  const { settings } = useSettings();
   const [description, setDescription] = useState("");
   const [tagId, setTagId] = useState("");
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const selectableTags = getSelectableTags(tags, activeEntry?.tag_id);
+  const isMac = navigator.platform.toUpperCase().includes("MAC");
+  const stopShortcut = settings?.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -43,8 +52,10 @@ export function StopPrompt({ onClose }: StopPromptProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (eventMatchesShortcut(e.nativeEvent, stopShortcut, isMac)) {
+      e.preventDefault();
       handleStop();
+      return;
     }
     if (e.key === "Escape") {
       onClose();
@@ -129,7 +140,7 @@ export function StopPrompt({ onClose }: StopPromptProps) {
           </button>
         </div>
         <p className="text-center text-[10px] text-[var(--text-muted)] mt-2">
-          ⌘ Enter to save
+          {formatShortcut(stopShortcut, isMac)} to save
         </p>
       </div>
     </div>

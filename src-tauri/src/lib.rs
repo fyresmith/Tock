@@ -1,6 +1,7 @@
 mod backup;
 mod commands;
 mod db;
+mod tray;
 
 use tauri::Manager;
 
@@ -20,7 +21,7 @@ use commands::{
     },
     settings::{get_dashboard_data, get_settings, update_setting, update_settings_batch},
     tags::{archive_tag, create_tag, list_tags, unarchive_tag, update_tag},
-    timer::{discard_timer, get_active_timer, open_timer_popup, start_timer, stop_timer},
+    timer::{discard_timer, get_active_timer, start_timer, stop_timer},
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -38,6 +39,7 @@ pub fn run() {
                     .expect("Failed to initialize database");
                 app_handle.manage(pool);
             });
+            tray::setup_tray(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -46,7 +48,6 @@ pub fn run() {
             stop_timer,
             get_active_timer,
             discard_timer,
-            open_timer_popup,
             // Entries
             create_entry,
             update_entry,

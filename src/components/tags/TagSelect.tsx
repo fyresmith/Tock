@@ -1,4 +1,5 @@
 import { EntryTag } from "../../lib/commands";
+import { Select, type SelectOption } from "../ui/Select";
 
 export function getSelectableTags(tags: EntryTag[], currentTagId?: string | null) {
   return tags.filter((tag) => !tag.is_archived || tag.id === currentTagId);
@@ -15,17 +16,10 @@ export function TagSelect({
   onChange: (value: string) => void;
   className?: string;
 }) {
-  return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className={className}
-    >
-      {tags.map((tag) => (
-        <option key={tag.id} value={tag.id}>
-          {tag.name}{tag.is_archived ? " (Archived)" : ""}
-        </option>
-      ))}
-    </select>
-  );
+  const options: SelectOption[] = tags.map((tag) => ({
+    value: tag.id,
+    label: tag.name + (tag.is_archived ? " (Archived)" : ""),
+  }));
+
+  return <Select value={value} onChange={onChange} options={options} className={className} />;
 }
