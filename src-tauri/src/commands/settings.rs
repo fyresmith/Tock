@@ -5,6 +5,18 @@ use std::collections::BTreeMap;
 
 use crate::backup;
 
+const SHORTCUT_BINDINGS_KEY: &str = "shortcut_bindings";
+const ACTION_OPEN_COMMAND_PALETTE: &str = "open-command-palette";
+const ACTION_TOGGLE_TIMER: &str = "toggle-timer";
+const ACTION_STOP_TIMER: &str = "stop-timer";
+const ACTION_OPEN_MANUAL_ENTRY: &str = "open-manual-entry";
+const ACTION_GO_TO_TIMER: &str = "go-to-timer";
+const ACTION_GO_TO_LOG: &str = "go-to-log";
+const ACTION_GO_TO_DASHBOARD: &str = "go-to-dashboard";
+const ACTION_GO_TO_INVOICES: &str = "go-to-invoices";
+const ACTION_GO_TO_SETTINGS: &str = "go-to-settings";
+const ACTION_OPEN_SHORTCUTS_SETTINGS: &str = "open-shortcuts-settings";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub hourly_rate: String,
@@ -18,6 +30,7 @@ pub struct Settings {
     pub theme: String,
     pub invoice_notes: String,
     pub time_rounding: String,
+    pub shortcut_bindings: BTreeMap<String, String>,
     pub command_palette_shortcut: String,
     pub quick_add_entry_shortcut: String,
     pub stop_timer_shortcut: String,
@@ -175,7 +188,112 @@ fn month_key(date: NaiveDate) -> String {
     format!("{:04}-{:02}", date.year(), date.month())
 }
 
-fn allowed_setting_keys() -> [&'static str; 14] {
+fn known_shortcut_action_ids() -> [&'static str; 10] {
+    [
+        ACTION_OPEN_COMMAND_PALETTE,
+        ACTION_TOGGLE_TIMER,
+        ACTION_STOP_TIMER,
+        ACTION_OPEN_MANUAL_ENTRY,
+        ACTION_GO_TO_TIMER,
+        ACTION_GO_TO_LOG,
+        ACTION_GO_TO_DASHBOARD,
+        ACTION_GO_TO_INVOICES,
+        ACTION_GO_TO_SETTINGS,
+        ACTION_OPEN_SHORTCUTS_SETTINGS,
+    ]
+}
+
+fn default_shortcut_bindings() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (ACTION_OPEN_COMMAND_PALETTE.to_string(), "mod+k".to_string()),
+        (ACTION_TOGGLE_TIMER.to_string(), "space".to_string()),
+        (ACTION_STOP_TIMER.to_string(), "mod+enter".to_string()),
+        (
+            ACTION_OPEN_MANUAL_ENTRY.to_string(),
+            "mod+shift+n".to_string(),
+        ),
+        (ACTION_GO_TO_TIMER.to_string(), "mod+1".to_string()),
+        (ACTION_GO_TO_LOG.to_string(), "mod+2".to_string()),
+        (ACTION_GO_TO_DASHBOARD.to_string(), "mod+3".to_string()),
+        (ACTION_GO_TO_INVOICES.to_string(), "mod+4".to_string()),
+        (ACTION_GO_TO_SETTINGS.to_string(), "mod+5".to_string()),
+    ])
+}
+
+fn sanitize_shortcut_bindings(bindings: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    let allowed = known_shortcut_action_ids();
+    bindings
+        .into_iter()
+        .filter_map(|(action_id, shortcut)| {
+            if !allowed.contains(&action_id.as_str()) {
+                return None;
+            }
+
+            let trimmed = shortcut.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            Some((action_id, trimmed.to_string()))
+        })
+        .collect()
+}
+
+async fn persist_shortcut_bindings(
+    pool: &SqlitePool,
+    bindings: &BTreeMap<String, String>,
+) -> Result<(), String> {
+    let serialized = serde_json::to_string(bindings).map_err(|e| e.to_string())?;
+    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
+        .bind(SHORTCUT_BINDINGS_KEY)
+        .bind(serialized)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn migrated_shortcut_bindings(pool: &SqlitePool) -> BTreeMap<String, String> {
+    let mut bindings = default_shortcut_bindings();
+
+    let legacy_overrides = [
+        ("command_palette_shortcut", ACTION_OPEN_COMMAND_PALETTE),
+        ("quick_add_entry_shortcut", ACTION_OPEN_MANUAL_ENTRY),
+        ("stop_timer_shortcut", ACTION_STOP_TIMER),
+    ];
+
+    for (legacy_key, action_id) in legacy_overrides {
+        let value = get_setting_value(pool, legacy_key).await;
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            bindings.insert(action_id.to_string(), trimmed.to_string());
+        }
+    }
+
+    bindings
+}
+
+async fn ensure_shortcut_bindings(pool: &SqlitePool) -> Result<BTreeMap<String, String>, String> {
+    let raw = get_setting_value(pool, SHORTCUT_BINDINGS_KEY).await;
+
+    if !raw.trim().is_empty() {
+        if let Ok(parsed) = serde_json::from_str::<BTreeMap<String, String>>(&raw) {
+            let sanitized = sanitize_shortcut_bindings(parsed.clone());
+            if !sanitized.is_empty() {
+                if sanitized != parsed {
+                    persist_shortcut_bindings(pool, &sanitized).await?;
+                }
+                return Ok(sanitized);
+            }
+        }
+    }
+
+    let migrated = migrated_shortcut_bindings(pool).await;
+    persist_shortcut_bindings(pool, &migrated).await?;
+    Ok(migrated)
+}
+
+fn allowed_setting_keys() -> [&'static str; 15] {
     [
         "hourly_rate",
         "currency",
@@ -188,6 +306,7 @@ fn allowed_setting_keys() -> [&'static str; 14] {
         "theme",
         "invoice_notes",
         "time_rounding",
+        "shortcut_bindings",
         "command_palette_shortcut",
         "quick_add_entry_shortcut",
         "stop_timer_shortcut",
@@ -199,6 +318,7 @@ pub async fn get_settings(
     pool: tauri::State<'_, SqlitePool>,
     app: tauri::AppHandle,
 ) -> Result<Settings, String> {
+    let shortcut_bindings = ensure_shortcut_bindings(pool.inner()).await?;
     let backup_directory = {
         let configured = get_setting_value(pool.inner(), "backup_directory").await;
         if configured.trim().is_empty() {
@@ -231,6 +351,7 @@ pub async fn get_settings(
         theme: get_setting_value(pool.inner(), "theme").await,
         invoice_notes: get_setting_value(pool.inner(), "invoice_notes").await,
         time_rounding: get_setting_value(pool.inner(), "time_rounding").await,
+        shortcut_bindings,
         command_palette_shortcut: get_setting_value(pool.inner(), "command_palette_shortcut").await,
         quick_add_entry_shortcut: get_setting_value(pool.inner(), "quick_add_entry_shortcut").await,
         stop_timer_shortcut: get_setting_value(pool.inner(), "stop_timer_shortcut").await,
@@ -289,6 +410,19 @@ pub async fn update_settings_batch(
     tx.commit().await.map_err(|e| e.to_string())?;
 
     backup::run_auto_backup_if_enabled(pool.inner(), &app, "settings-update-batch").await;
+    get_settings(pool, app).await
+}
+
+#[tauri::command]
+pub async fn update_shortcut_bindings(
+    pool: tauri::State<'_, SqlitePool>,
+    app: tauri::AppHandle,
+    bindings: BTreeMap<String, String>,
+) -> Result<Settings, String> {
+    let sanitized = sanitize_shortcut_bindings(bindings);
+    persist_shortcut_bindings(pool.inner(), &sanitized).await?;
+
+    backup::run_auto_backup_if_enabled(pool.inner(), &app, "settings-update-shortcuts").await;
     get_settings(pool, app).await
 }
 

@@ -19,7 +19,10 @@ use commands::{
         list_invoices, mark_invoice_paid, preview_invoice, regenerate_invoice,
         revert_invoice_to_draft, save_invoice_pdf, send_invoice,
     },
-    settings::{get_dashboard_data, get_settings, update_setting, update_settings_batch},
+    settings::{
+        get_dashboard_data, get_settings, update_setting, update_settings_batch,
+        update_shortcut_bindings,
+    },
     tags::{archive_tag, create_tag, list_tags, unarchive_tag, update_tag},
     timer::{discard_timer, get_active_timer, start_timer, stop_timer},
 };
@@ -73,6 +76,7 @@ pub fn run() {
             get_settings,
             update_setting,
             update_settings_batch,
+            update_shortcut_bindings,
             get_dashboard_data,
             // Tags
             list_tags,

@@ -3,7 +3,8 @@ import { useTimer } from "../../hooks/useTimer";
 import { useClients } from "../../hooks/useClients";
 import { useSettings } from "../../hooks/useSettings";
 import { elapsedSeconds, secondsToHHMMSS, formatTime } from "../../lib/dateUtils";
-import { DEFAULT_STOP_TIMER_SHORTCUT, formatShortcut } from "../../lib/shortcuts";
+import { formatShortcut } from "../../lib/shortcuts";
+import { getDefaultShortcutBindings, normalizeShortcutBindings } from "../../lib/shortcutRegistry";
 import { StopPrompt } from "./StopPrompt";
 import { Play, Square, Pause, AlertTriangle } from "lucide-react";
 import { Select } from "../ui/Select";
@@ -19,7 +20,15 @@ export function TimerView() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
-  const stopShortcut = settings?.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT;
+  const shortcutBindings = useMemo(
+    () =>
+      settings?.shortcut_bindings
+        ? normalizeShortcutBindings(settings.shortcut_bindings)
+        : getDefaultShortcutBindings(),
+    [settings?.shortcut_bindings],
+  );
+  const toggleShortcut = shortcutBindings["toggle-timer"] ?? "";
+  const stopShortcut = shortcutBindings["stop-timer"] ?? "";
 
   // Track selected client — default to the default client when clients load
   useEffect(() => {
@@ -181,9 +190,19 @@ export function TimerView() {
 
         {/* Kbd hints */}
         <p className="text-[11px] text-[var(--text-muted)] opacity-60">
-          <kbd className="font-mono">Space</kbd> start/pause
-          {" · "}
-          <kbd className="font-mono">{formatShortcut(stopShortcut, isMac)}</kbd> stop
+          {toggleShortcut ? (
+            <>
+              <kbd className="font-mono">{formatShortcut(toggleShortcut, isMac)}</kbd> start/pause
+            </>
+          ) : (
+            "No timer toggle shortcut set"
+          )}
+          {stopShortcut && (
+            <>
+              {" · "}
+              <kbd className="font-mono">{formatShortcut(stopShortcut, isMac)}</kbd> stop
+            </>
+          )}
         </p>
       </div>
 

@@ -225,9 +225,6 @@ function InvoiceDetailModal({
                     <Mail size={15} />
                     Prep Gmail Draft
                   </button>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Saves the PDF, opens a Gmail draft, and reveals the file so you can attach it manually.
-                  </p>
                   {!billingEmail && (
                     <p className="text-xs text-[var(--warning)]">
                       Add a billing email for {billedToName} in Settings to use Gmail helper.

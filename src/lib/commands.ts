@@ -103,6 +103,7 @@ export interface Settings {
   theme: string;
   invoice_notes: string;
   time_rounding: string;
+  shortcut_bindings: Record<string, string>;
   command_palette_shortcut: string;
   quick_add_entry_shortcut: string;
   stop_timer_shortcut: string;
@@ -345,6 +346,9 @@ export const updateSetting = (key: string, value: string) =>
 
 export const updateSettingsBatch = (changes: SettingChange[]) =>
   invoke<Settings>("update_settings_batch", { changes });
+
+export const updateShortcutBindings = (bindings: Record<string, string>) =>
+  invoke<Settings>("update_shortcut_bindings", { bindings });
 
 export const exportCsv = () => invoke<string>("export_csv");
 

@@ -1,17 +1,6 @@
 import { useEffect, useCallback, useState, useMemo } from "react";
 import { listen } from "@tauri-apps/api/event";
-import {
-  ClipboardList,
-  FileText,
-  Keyboard,
-  LayoutDashboard,
-  Pause,
-  Play,
-  PlusCircle,
-  Settings2,
-  Square,
-  Timer,
-} from "lucide-react";
+import { Pause, Play } from "lucide-react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { CommandPalette, type CommandPaletteAction } from "./components/command/CommandPalette";
 import { TimerView } from "./components/timer/TimerView";
@@ -24,13 +13,14 @@ import { useTimerStore } from "./stores/timerStore";
 import { useSettings } from "./hooks/useSettings";
 import { useTimerSync } from "./hooks/useTimerSync";
 import { startTimer } from "./lib/commands";
-import { type SettingsSection, type View, APP_VIEWS } from "./lib/navigation";
+import { type SettingsSection, type View } from "./lib/navigation";
 import {
-  DEFAULT_COMMAND_PALETTE_SHORTCUT,
-  DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
-  DEFAULT_STOP_TIMER_SHORTCUT,
-  eventMatchesShortcut,
-} from "./lib/shortcuts";
+  SHORTCUT_DEFINITIONS,
+  getDefaultShortcutBindings,
+  normalizeShortcutBindings,
+  type ShortcutActionId,
+} from "./lib/shortcutRegistry";
+import { eventMatchesShortcut, isEditableTarget } from "./lib/shortcuts";
 
 export function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
@@ -43,11 +33,13 @@ export function App() {
   useTimerSync();
 
   const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
-  const commandPaletteShortcut =
-    settings?.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT;
-  const quickAddEntryShortcut =
-    settings?.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT;
-  const stopTimerShortcut = settings?.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT;
+  const shortcutBindings = useMemo(
+    () =>
+      settings?.shortcut_bindings
+        ? normalizeShortcutBindings(settings.shortcut_bindings)
+        : getDefaultShortcutBindings(),
+    [settings?.shortcut_bindings],
+  );
 
   useEffect(() => {
     if (settings?.theme === "light") {
@@ -75,132 +67,126 @@ export function App() {
     setCurrentView("settings");
   }, []);
 
-  const commandPaletteActions = useMemo<CommandPaletteAction[]>(() => {
-    const actions: CommandPaletteAction[] = [
-      {
-        id: "nav-timer",
-        title: "Go to Timer",
-        subtitle: "Jump back to the live timer screen.",
-        keywords: ["home", "clock", "recording"],
-        group: "Navigation",
-        icon: Timer,
-        perform: () => setCurrentView("timer"),
-      },
-      {
-        id: "nav-log",
-        title: "Go to Time Log",
-        subtitle: "Review, filter, and edit tracked entries.",
-        keywords: ["entries", "timesheet", "hours"],
-        group: "Navigation",
-        icon: ClipboardList,
-        perform: () => setCurrentView("log"),
-      },
-      {
-        id: "nav-dashboard",
-        title: "Go to Dashboard",
-        subtitle: "See billed time, earnings, and receivables.",
-        keywords: ["metrics", "stats", "ar", "receivables"],
-        group: "Navigation",
-        icon: LayoutDashboard,
-        perform: () => setCurrentView("dashboard"),
-      },
-      {
-        id: "nav-invoices",
-        title: "Go to Invoices",
-        subtitle: "Create, issue, and track invoices.",
-        keywords: ["billing", "gmail", "pdf"],
-        group: "Navigation",
-        icon: FileText,
-        perform: () => setCurrentView("invoices"),
-      },
-      {
-        id: "nav-settings",
-        title: "Go to Settings",
-        subtitle: "Open app settings and preferences.",
-        keywords: ["preferences", "configuration"],
-        group: "Navigation",
-        icon: Settings2,
-        perform: () => setCurrentView("settings"),
-      },
-      {
-        id: "add-manual-entry",
-        title: "Add Manual Time Entry",
-        subtitle: "Open the time log and launch the manual entry form.",
-        keywords: ["new entry", "quick add", "timesheet"],
-        group: "Entries",
-        icon: PlusCircle,
-        shortcut: quickAddEntryShortcut,
-        perform: openManualEntry,
-      },
-      {
-        id: "open-shortcuts-settings",
-        title: "Open Keyboard Shortcuts Settings",
-        subtitle: "Customize the command palette and quick action shortcuts.",
-        keywords: ["command palette", "hotkeys", "keyboard"],
-        group: "Settings",
-        icon: Keyboard,
-        perform: () => navigateToSettings("shortcuts"),
-      },
-    ];
-
-    if (!isRunning && !isPaused) {
-      actions.push({
-        id: "start-timer",
-        title: "Start Timer",
-        subtitle: "Begin tracking a new session from anywhere.",
-        keywords: ["record", "clock in"],
-        group: "Timer",
-        icon: Play,
-        perform: async () => {
-          setCurrentView("timer");
-          const entry = await startTimer(null);
-          setActiveEntry(entry);
-        },
-      });
-    }
-
-    if (isRunning && !isPaused) {
-      actions.push({
-        id: "pause-timer",
-        title: "Pause Timer",
-        subtitle: "Pause the active session without stopping it.",
-        keywords: ["hold", "break"],
-        group: "Timer",
-        icon: Pause,
-        perform: () => {
-          setCurrentView("timer");
-          pause();
-        },
-      });
-    }
-
+  const toggleTimer = useCallback(async () => {
+    setCurrentView("timer");
     if (isPaused) {
-      actions.push({
-        id: "resume-timer",
-        title: "Resume Timer",
-        subtitle: "Continue the paused session.",
-        keywords: ["continue", "restart"],
-        group: "Timer",
-        icon: Play,
-        perform: () => {
-          setCurrentView("timer");
-          resume();
-        },
-      });
+      resume();
+      return true;
     }
+    if (isRunning) {
+      pause();
+      return true;
+    }
+    const entry = await startTimer(null);
+    setActiveEntry(entry);
+    return true;
+  }, [isPaused, isRunning, pause, resume, setActiveEntry]);
 
-    if (isRunning || isPaused) {
-      actions.push({
-        id: "stop-timer",
-        title: "Stop Timer",
-        subtitle: "Open the stop prompt to save the current entry.",
-        keywords: ["finish", "save entry"],
-        group: "Timer",
-        icon: Square,
-        shortcut: stopTimerShortcut,
-        perform: () => {
+  const openStopPrompt = useCallback(() => {
+    if (!isRunning && !isPaused) {
+      return false;
+    }
+    setCurrentView("timer");
+    setShowStop(true);
+    return true;
+  }, [isPaused, isRunning]);
+
+  const isShortcutActionAvailable = useCallback(
+    (actionId: ShortcutActionId) => {
+      switch (actionId) {
+        case "stop-timer":
+          return isRunning || isPaused;
+        default:
+          return true;
+      }
+    },
+    [isPaused, isRunning],
+  );
+
+  const runShortcutAction = useCallback(
+    async (actionId: ShortcutActionId) => {
+      switch (actionId) {
+        case "open-command-palette":
+          setCommandPaletteOpen((current) => !current);
+          return true;
+        case "toggle-timer":
+          return toggleTimer();
+        case "stop-timer":
+          return openStopPrompt();
+        case "open-manual-entry":
+          openManualEntry();
+          return true;
+        case "go-to-timer":
           setCurrentView("timer");
-          setShowStop(true);
+          return true;
+        case "go-to-log":
+          setCurrentView("log");
+          return true;
+        case "go-to-dashboard":
+          setCurrentView("dashboard");
+          return true;
+        case "go-to-invoices":
+          setCurrentView("invoices");
+          return true;
+        case "go-to-settings":
+          setCurrentView("settings");
+          return true;
+        case "open-shortcuts-settings":
+          navigateToSettings("shortcuts");
+          return true;
+        default:
+          return false;
+      }
+    },
+    [navigateToSettings, openManualEntry, openStopPrompt, toggleTimer],
+  );
+
+  const commandPaletteActions = useMemo<CommandPaletteAction[]>(() => {
+    const actions: CommandPaletteAction[] = [];
+
+    for (const definition of SHORTCUT_DEFINITIONS) {
+      if (definition.id === "open-command-palette") {
+        continue;
+      }
+
+      if (!isShortcutActionAvailable(definition.id)) {
+        continue;
+      }
+
+      if (definition.id === "toggle-timer") {
+        const title = !isRunning && !isPaused ? "Start Timer" : isPaused ? "Resume Timer" : "Pause Timer";
+        const subtitle = !isRunning && !isPaused
+          ? "Begin tracking a new session from anywhere."
+          : isPaused
+            ? "Continue the paused session."
+            : "Pause the active session without stopping it.";
+        const icon = !isRunning && !isPaused ? Play : isPaused ? Play : Pause;
+
+        actions.push({
+          id: definition.id,
+          title,
+          subtitle,
+          keywords: definition.keywords,
+          group: definition.group,
+          icon,
+          shortcut: shortcutBindings[definition.id],
+          perform: async () => {
+            await runShortcutAction(definition.id);
+          },
+        });
+        continue;
+      }
+
+      actions.push({
+        id: definition.id,
+        title: definition.title,
+        subtitle: definition.description,
+        keywords: definition.keywords,
+        group: definition.group,
+        icon: definition.icon,
+        shortcut: shortcutBindings[definition.id],
+        perform: async () => {
+          await runShortcutAction(definition.id);
         },
       });
     }
@@ -209,13 +195,9 @@ export function App() {
   }, [
     isRunning,
     isPaused,
-    openManualEntry,
-    navigateToSettings,
-    pause,
-    quickAddEntryShortcut,
-    resume,
-    setActiveEntry,
-    stopTimerShortcut,
+    isShortcutActionAvailable,
+    runShortcutAction,
+    shortcutBindings,
   ]);
 
   const handleKeyDown = useCallback(
@@ -224,14 +206,17 @@ export function App() {
         return;
       }
 
-      const inInput =
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement;
+      const inInput = isEditableTarget(e.target);
+      const matchedDefinition = SHORTCUT_DEFINITIONS.find((definition) => {
+        const binding = shortcutBindings[definition.id];
+        if (!binding) return false;
+        if (inInput && !definition.firesWhileEditing) return false;
+        return eventMatchesShortcut(e, binding, isMac);
+      });
 
-      if (eventMatchesShortcut(e, commandPaletteShortcut, isMac)) {
+      if (matchedDefinition?.id === "open-command-palette") {
         e.preventDefault();
-        setCommandPaletteOpen((current) => !current);
+        await runShortcutAction("open-command-palette");
         return;
       }
 
@@ -243,55 +228,21 @@ export function App() {
         return;
       }
 
-      if (eventMatchesShortcut(e, quickAddEntryShortcut, isMac)) {
-        e.preventDefault();
-        openManualEntry();
+      if (!matchedDefinition || !isShortcutActionAvailable(matchedDefinition.id)) {
         return;
       }
 
-      // Space — start / pause / resume (never in inputs)
-      if (e.code === "Space" && !inInput && !e.metaKey && !e.ctrlKey) {
+      const handled = await runShortcutAction(matchedDefinition.id);
+      if (handled) {
         e.preventDefault();
-        if (isPaused) {
-          resume();
-        } else if (isRunning) {
-          pause();
-        } else {
-          setCurrentView("timer");
-          const entry = await startTimer(null);
-          setActiveEntry(entry);
-        }
-      }
-
-      // Custom stop shortcut — open stop prompt
-      if (eventMatchesShortcut(e, stopTimerShortcut, isMac) && !inInput) {
-        e.preventDefault();
-        if (isRunning || isPaused) {
-          setCurrentView("timer");
-          setShowStop(true);
-        }
-        return;
-      }
-
-      // Cmd/Ctrl+1-5 — navigate
-      const modKey = isMac ? e.metaKey : e.ctrlKey;
-      if (modKey && e.key >= "1" && e.key <= "5") {
-        e.preventDefault();
-        setCurrentView(APP_VIEWS[parseInt(e.key, 10) - 1]);
       }
     },
     [
       commandPaletteOpen,
-      commandPaletteShortcut,
-      isRunning,
-      isPaused,
-      openManualEntry,
-      pause,
-      quickAddEntryShortcut,
-      resume,
-      setActiveEntry,
+      isShortcutActionAvailable,
       isMac,
-      stopTimerShortcut,
+      runShortcutAction,
+      shortcutBindings,
     ]
   );
 

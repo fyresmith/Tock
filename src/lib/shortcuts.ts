@@ -1,7 +1,3 @@
-export const DEFAULT_COMMAND_PALETTE_SHORTCUT = "mod+k";
-export const DEFAULT_QUICK_ADD_ENTRY_SHORTCUT = "mod+shift+n";
-export const DEFAULT_STOP_TIMER_SHORTCUT = "mod+enter";
-
 const MODIFIER_ALIASES: Record<string, "mod" | "shift" | "alt" | "ctrl" | "meta"> = {
   mod: "mod",
   cmd: "meta",
@@ -31,11 +27,11 @@ function normalizeEventKey(event: KeyboardEvent): string {
   return normalizeShortcutKey(event.key);
 }
 
-function parseShortcut(shortcut: string): { modifiers: Set<string>; key: string } {
+function parseShortcut(shortcut?: string | null): { modifiers: Set<string>; key: string } {
   const modifiers = new Set<string>();
   let key = "";
 
-  for (const rawPart of shortcut.split("+")) {
+  for (const rawPart of (shortcut ?? "").split("+")) {
     const normalized = normalizeShortcutKey(rawPart);
     if (!normalized) continue;
     const modifier = MODIFIER_ALIASES[normalized];
@@ -49,14 +45,14 @@ function parseShortcut(shortcut: string): { modifiers: Set<string>; key: string 
   return { modifiers, key };
 }
 
-export function normalizeShortcut(shortcut: string): string {
+export function normalizeShortcut(shortcut?: string | null): string {
   const { modifiers, key } = parseShortcut(shortcut);
   const parts: string[] = MODIFIER_ORDER.filter((modifier) => modifiers.has(modifier));
   if (key) parts.push(key);
   return parts.join("+");
 }
 
-export function formatShortcut(shortcut: string, isMac: boolean): string {
+export function formatShortcut(shortcut: string | null | undefined, isMac: boolean): string {
   const normalized = normalizeShortcut(shortcut);
   if (!normalized) return "Not set";
 
@@ -95,7 +91,7 @@ export function formatShortcut(shortcut: string, isMac: boolean): string {
 
 export function eventMatchesShortcut(
   event: KeyboardEvent,
-  shortcut: string,
+  shortcut: string | null | undefined,
   isMac: boolean,
 ): boolean {
   const normalized = normalizeShortcut(shortcut);
@@ -148,4 +144,24 @@ export function shortcutFromEvent(event: KeyboardEvent, isMac: boolean): string 
   parts.push(key);
 
   return normalizeShortcut(parts.join("+"));
+}
+
+export function shortcutHasModifier(shortcut: string | null | undefined): boolean {
+  return parseShortcut(shortcut).modifiers.size > 0;
+}
+
+export function isSpaceShortcut(shortcut: string | null | undefined): boolean {
+  return normalizeShortcut(shortcut) === "space";
+}
+
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  ) {
+    return true;
+  }
+  return target.isContentEditable;
 }

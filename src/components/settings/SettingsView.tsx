@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { useTags } from "../../hooks/useTags";
 import { useClients } from "../../hooks/useClients";
@@ -16,13 +16,19 @@ import {
 } from "../../lib/commands";
 import { type SettingsSection } from "../../lib/navigation";
 import {
-  DEFAULT_COMMAND_PALETTE_SHORTCUT,
-  DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
-  DEFAULT_STOP_TIMER_SHORTCUT,
   formatShortcut,
+  isSpaceShortcut,
+  shortcutHasModifier,
   normalizeShortcut,
   shortcutFromEvent,
 } from "../../lib/shortcuts";
+import {
+  SHORTCUT_DEFINITIONS,
+  IMPORTANT_SHORTCUT_ACTION_IDS,
+  createShortcutDraft,
+  normalizeShortcutBindings,
+  type ShortcutActionId,
+} from "../../lib/shortcutRegistry";
 import { formatCurrency } from "../../lib/dateUtils";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -85,7 +91,7 @@ const NAV_ITEMS: Array<{
     label: "Shortcuts",
     icon: Keyboard,
     eyebrow: "Command Palette",
-    description: "Customize the shortcuts that open your command palette, quick-add manual entries, and stop the active timer.",
+    description: "Customize the key bindings for navigation, timer controls, manual entry, and the command palette.",
   },
   {
     id: "tags",
@@ -375,14 +381,12 @@ function SelectInput({
   );
 }
 
-function ShortcutRecorderInput({
+function ShortcutCaptureButton({
   value,
-  defaultValue,
   isMac,
   onChange,
 }: {
   value: string;
-  defaultValue: string;
   isMac: boolean;
   onChange: (value: string) => void;
 }) {
@@ -403,8 +407,13 @@ function ShortcutRecorderInput({
           return;
         }
 
+        if (event.key === "Tab") {
+          setListening(false);
+          return;
+        }
+
         if (event.key === "Backspace" || event.key === "Delete") {
-          onChange(defaultValue);
+          onChange("");
           setListening(false);
           return;
         }
@@ -431,6 +440,59 @@ function ShortcutRecorderInput({
       </span>
     </button>
   );
+}
+
+type ShortcutDraftState = Record<ShortcutActionId, string>;
+
+function getShortcutDraftFromSettings(settings: Settings): ShortcutDraftState {
+  return createShortcutDraft(normalizeShortcutBindings(settings.shortcut_bindings));
+}
+
+function getShortcutValidationErrors(draft: ShortcutDraftState): Partial<Record<ShortcutActionId, string>> {
+  const errors: Partial<Record<ShortcutActionId, string>> = {};
+  const actionsByShortcut = new Map<string, ShortcutActionId[]>();
+
+  for (const definition of SHORTCUT_DEFINITIONS) {
+    const shortcut = normalizeShortcut(draft[definition.id]);
+    if (!shortcut) continue;
+
+    const hasModifier = shortcutHasModifier(shortcut);
+    if (!hasModifier) {
+      if (definition.allowModifierless && isSpaceShortcut(shortcut)) {
+        // Space is the single allowed modifierless shortcut.
+      } else if (isSpaceShortcut(shortcut)) {
+        errors[definition.id] = "Space is reserved for the timer toggle shortcut.";
+        continue;
+      } else {
+        errors[definition.id] = definition.allowModifierless
+          ? "Only Space can be modifierless for this action."
+          : "This shortcut needs at least one modifier key.";
+        continue;
+      }
+    }
+
+    if (!definition.allowModifierless && isSpaceShortcut(shortcut)) {
+      errors[definition.id] = "Space is reserved for the timer toggle shortcut.";
+      continue;
+    }
+
+    const actionIds = actionsByShortcut.get(shortcut) ?? [];
+    actionIds.push(definition.id);
+    actionsByShortcut.set(shortcut, actionIds);
+  }
+
+  for (const actionIds of actionsByShortcut.values()) {
+    if (actionIds.length < 2) continue;
+    for (const actionId of actionIds) {
+      const otherTitles = actionIds
+        .filter((id) => id !== actionId)
+        .map((id) => SHORTCUT_DEFINITIONS.find((definition) => definition.id === id)?.title ?? id)
+        .join(", ");
+      errors[actionId] = `Already assigned to ${otherTitles}.`;
+    }
+  }
+
+  return errors;
 }
 
 function BillingSettingsSection({
@@ -937,69 +999,138 @@ function AppearanceSettingsSection({
   );
 }
 
+function ShortcutSummaryCard({
+  isMac,
+}: {
+  isMac: boolean;
+}) {
+  return (
+    <SettingsSectionCard
+      title="Default Setup"
+      description="These are the starter shortcuts Tock applies for the most common contractor workflows."
+    >
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {IMPORTANT_SHORTCUT_ACTION_IDS.map((actionId) => {
+          const definition = SHORTCUT_DEFINITIONS.find((item) => item.id === actionId);
+          if (!definition || !definition.defaultShortcut) return null;
+          return (
+            <SettingsStat
+              key={definition.id}
+              label={definition.title}
+              value={formatShortcut(definition.defaultShortcut, isMac)}
+            />
+          );
+        })}
+      </div>
+    </SettingsSectionCard>
+  );
+}
+
+function ShortcutSettingRow({
+  definition,
+  value,
+  isMac,
+  error,
+  onChange,
+}: {
+  definition: (typeof SHORTCUT_DEFINITIONS)[number];
+  value: string;
+  isMac: boolean;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
+  const currentLabel = formatShortcut(value, isMac);
+  const defaultLabel = definition.defaultShortcut
+    ? formatShortcut(definition.defaultShortcut, isMac)
+    : "No default";
+
+  return (
+    <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 xl:max-w-[20rem]">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-[var(--text-primary)]">{definition.title}</p>
+            {!value && <SettingsPill label="Not set" />}
+          </div>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{definition.description}</p>
+          <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
+            Current: <span className="font-medium text-[var(--text-primary)]">{currentLabel}</span>
+            {" · "}
+            Default: <span className="font-medium text-[var(--text-primary)]">{defaultLabel}</span>
+          </p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 xl:max-w-[24rem]">
+          <ShortcutCaptureButton value={value} isMac={isMac} onChange={onChange} />
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onChange("")}
+              disabled={!value}
+              className={`${buttonClass("secondary")} disabled:opacity-50`}
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => onChange(definition.defaultShortcut ?? "")}
+              disabled={!definition.defaultShortcut}
+              className={`${buttonClass("ghost")} disabled:opacity-50`}
+            >
+              Reset to Default
+            </button>
+          </div>
+          {error && <p className="text-xs text-[var(--warning)]">{error}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ShortcutsSettingsSection({
   settings,
-  updateMany,
+  updateShortcuts,
 }: {
   settings: Settings;
-  updateMany: (changes: Array<{ key: string; value: string }>) => Promise<Settings>;
+  updateShortcuts: (bindings: Record<string, string>) => Promise<Settings>;
 }) {
   const isMac = useMemo(() => navigator.platform.toUpperCase().includes("MAC"), []);
-  const [draft, setDraft] = useState({
-    command_palette_shortcut:
-      settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT,
-    quick_add_entry_shortcut:
-      settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
-    stop_timer_shortcut: settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT,
-  });
+  const [draft, setDraft] = useState<ShortcutDraftState>(getShortcutDraftFromSettings(settings));
   const [status, setStatus] = useState<StatusMessageState>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft({
-      command_palette_shortcut:
-        settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT,
-      quick_add_entry_shortcut:
-        settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
-      stop_timer_shortcut: settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT,
-    });
-  }, [
-    settings.command_palette_shortcut,
-    settings.quick_add_entry_shortcut,
-    settings.stop_timer_shortcut,
-  ]);
+    setDraft(getShortcutDraftFromSettings(settings));
+  }, [settings.shortcut_bindings]);
 
-  const dirty =
-    draft.command_palette_shortcut !==
-      (settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT) ||
-    draft.quick_add_entry_shortcut !==
-      (settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT) ||
-    draft.stop_timer_shortcut !== (settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT);
+  const persistedDraft = useMemo(() => getShortcutDraftFromSettings(settings), [settings]);
+  const dirty = SHORTCUT_DEFINITIONS.some(
+    (definition) => normalizeShortcut(draft[definition.id]) !== normalizeShortcut(persistedDraft[definition.id]),
+  );
 
-  const normalizedShortcuts = [
-    normalizeShortcut(draft.command_palette_shortcut),
-    normalizeShortcut(draft.quick_add_entry_shortcut),
-    normalizeShortcut(draft.stop_timer_shortcut),
-  ];
-  const uniqueShortcutCount = new Set(normalizedShortcuts).size;
-  const hasDuplicateShortcuts = uniqueShortcutCount !== normalizedShortcuts.length;
+  const validationErrors = useMemo(() => getShortcutValidationErrors(draft), [draft]);
+  const normalizedBindings = useMemo(() => normalizeShortcutBindings(draft), [draft]);
+  const errorCount = Object.keys(validationErrors).length;
+
+  const groupedDefinitions = useMemo(() => {
+    const groups = new Map<string, typeof SHORTCUT_DEFINITIONS>();
+    for (const definition of SHORTCUT_DEFINITIONS) {
+      const existing = groups.get(definition.group) ?? [];
+      groups.set(definition.group, [...existing, definition]);
+    }
+    return Array.from(groups.entries());
+  }, []);
 
   const save = async () => {
-    if (hasDuplicateShortcuts) {
+    if (errorCount > 0) {
       setStatus({
         tone: "danger",
-        message: "Each shortcut needs its own unique key combination.",
+        message: "Fix the shortcut conflicts before saving.",
       });
       return;
     }
 
     setSaving(true);
     try {
-      await updateMany([
-        { key: "command_palette_shortcut", value: draft.command_palette_shortcut },
-        { key: "quick_add_entry_shortcut", value: draft.quick_add_entry_shortcut },
-        { key: "stop_timer_shortcut", value: draft.stop_timer_shortcut },
-      ]);
+      await updateShortcuts(normalizedBindings as Record<string, string>);
       setStatus({ tone: "success", message: "Shortcut settings updated." });
     } catch (e) {
       setStatus({ tone: "danger", message: `Unable to save shortcuts: ${e}` });
@@ -1009,131 +1140,48 @@ function ShortcutsSettingsSection({
   };
 
   const reset = () => {
-    setDraft({
-      command_palette_shortcut:
-        settings.command_palette_shortcut || DEFAULT_COMMAND_PALETTE_SHORTCUT,
-      quick_add_entry_shortcut:
-        settings.quick_add_entry_shortcut || DEFAULT_QUICK_ADD_ENTRY_SHORTCUT,
-      stop_timer_shortcut: settings.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT,
-    });
+    setDraft(persistedDraft);
     setStatus(null);
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-3">
-        <SettingsStat
-          label="Palette"
-          value={formatShortcut(draft.command_palette_shortcut, isMac)}
-        />
-        <SettingsStat
-          label="Quick Add"
-          value={formatShortcut(draft.quick_add_entry_shortcut, isMac)}
-        />
-        <SettingsStat
-          label="Stop Timer"
-          value={formatShortcut(draft.stop_timer_shortcut, isMac)}
-        />
-      </div>
+      <ShortcutSummaryCard isMac={isMac} />
 
-      <SettingsSectionCard
-        title="Command Palette"
-        description="Open the palette from anywhere, then search for navigation targets and quick actions."
-      >
-        <div className="grid gap-4">
-          <SettingsField
-            label="Open command palette"
-            description="Use this to bring up the searchable action list."
-          >
-            <ShortcutRecorderInput
-              value={draft.command_palette_shortcut}
-              defaultValue={DEFAULT_COMMAND_PALETTE_SHORTCUT}
-              isMac={isMac}
-              onChange={(value) => {
-                setDraft((current) => ({ ...current, command_palette_shortcut: value }));
-                setStatus(null);
-              }}
-            />
-          </SettingsField>
-
-          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
-            <p className="text-sm text-[var(--text-secondary)]">
-              Search actions like “time log”, “dashboard”, “stop timer”, or “keyboard shortcuts”.
-            </p>
+      {groupedDefinitions.map(([group, definitions]) => (
+        <SettingsSectionCard
+          key={group}
+          title={group}
+          description={`Configure the ${group.toLowerCase()} shortcuts you want available globally.`}
+        >
+          <div className="space-y-3">
+            {definitions.map((definition) => (
+              <ShortcutSettingRow
+                key={definition.id}
+                definition={definition}
+                value={draft[definition.id]}
+                isMac={isMac}
+                error={validationErrors[definition.id]}
+                onChange={(value) => {
+                  setDraft((current) => ({ ...current, [definition.id]: normalizeShortcut(value) }));
+                  setStatus(null);
+                }}
+              />
+            ))}
           </div>
-        </div>
-      </SettingsSectionCard>
-
-      <SettingsSectionCard
-        title="Quick Actions"
-        description="Give your most common contractor workflows a single shortcut."
-      >
-        <div className="grid gap-4">
-          <SettingsField
-            label="Open manual time entry"
-            description="Navigates to the time log and opens the manual entry sheet right away."
-          >
-            <ShortcutRecorderInput
-              value={draft.quick_add_entry_shortcut}
-              defaultValue={DEFAULT_QUICK_ADD_ENTRY_SHORTCUT}
-              isMac={isMac}
-              onChange={(value) => {
-                setDraft((current) => ({ ...current, quick_add_entry_shortcut: value }));
-                setStatus(null);
-              }}
-            />
-          </SettingsField>
-
-          <SettingsField
-            label="Stop current timer"
-            description="Opens the stop prompt so you can describe and save the active session."
-          >
-            <ShortcutRecorderInput
-              value={draft.stop_timer_shortcut}
-              defaultValue={DEFAULT_STOP_TIMER_SHORTCUT}
-              isMac={isMac}
-              onChange={(value) => {
-                setDraft((current) => ({ ...current, stop_timer_shortcut: value }));
-                setStatus(null);
-              }}
-            />
-          </SettingsField>
-        </div>
-      </SettingsSectionCard>
-
-      <SettingsSectionCard
-        title="Built-In Shortcuts"
-        description="These stay fixed for now so the app keeps a dependable baseline."
-      >
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Timer
-            </p>
-            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">Space</p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">Start, pause, or resume the timer when you are not typing in a field.</p>
-          </div>
-          <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3 md:col-span-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Navigation
-            </p>
-            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-              {isMac ? "Cmd" : "Ctrl"} + 1-5
-            </p>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Jump directly to Timer, Time Log, Dashboard, Invoices, or Settings from anywhere in the app.
-            </p>
-          </div>
-        </div>
-      </SettingsSectionCard>
+        </SettingsSectionCard>
+      ))}
 
       <SettingsActionBar
         dirty={dirty}
         saving={saving}
-        saveDisabled={hasDuplicateShortcuts}
+        saveDisabled={errorCount > 0}
         status={
-          hasDuplicateShortcuts && !status
-            ? { tone: "warning", message: "Two actions are sharing the same shortcut right now." }
+          errorCount > 0 && !status
+            ? {
+                tone: "warning",
+                message: `Fix ${errorCount} shortcut ${errorCount === 1 ? "issue" : "issues"} before saving.`,
+              }
             : status
         }
         onSave={save}
@@ -2007,7 +2055,7 @@ export function SettingsView({
   activeSection: SettingsSection;
   onChangeSection: (section: SettingsSection) => void;
 }) {
-  const { settings, loading, update, updateMany } = useSettings();
+  const { settings, loading, update, updateMany, updateShortcuts } = useSettings();
 
   if (loading || !settings) {
     return (
@@ -2065,7 +2113,7 @@ export function SettingsView({
           )}
 
           {activeSection === "shortcuts" && (
-            <ShortcutsSettingsSection settings={settings} updateMany={updateMany} />
+            <ShortcutsSettingsSection settings={settings} updateShortcuts={updateShortcuts} />
           )}
 
           {activeSection === "clients" && <ClientsSettingsSection />}

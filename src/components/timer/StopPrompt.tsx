@@ -2,11 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useTimer } from "../../hooks/useTimer";
 import { useTags } from "../../hooks/useTags";
 import { useSettings } from "../../hooks/useSettings";
-import {
-  DEFAULT_STOP_TIMER_SHORTCUT,
-  eventMatchesShortcut,
-  formatShortcut,
-} from "../../lib/shortcuts";
+import { eventMatchesShortcut, formatShortcut } from "../../lib/shortcuts";
+import { getDefaultShortcutBindings, normalizeShortcutBindings } from "../../lib/shortcutRegistry";
 import { getSelectableTags, TagSelect } from "../tags/TagSelect";
 import { X } from "lucide-react";
 
@@ -24,7 +21,10 @@ export function StopPrompt({ onClose }: StopPromptProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const selectableTags = getSelectableTags(tags, activeEntry?.tag_id);
   const isMac = navigator.platform.toUpperCase().includes("MAC");
-  const stopShortcut = settings?.stop_timer_shortcut || DEFAULT_STOP_TIMER_SHORTCUT;
+  const shortcutBindings = settings?.shortcut_bindings
+    ? normalizeShortcutBindings(settings.shortcut_bindings)
+    : getDefaultShortcutBindings();
+  const stopShortcut = shortcutBindings["stop-timer"] ?? "";
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -52,7 +52,7 @@ export function StopPrompt({ onClose }: StopPromptProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (eventMatchesShortcut(e.nativeEvent, stopShortcut, isMac)) {
+    if (stopShortcut && eventMatchesShortcut(e.nativeEvent, stopShortcut, isMac)) {
       e.preventDefault();
       handleStop();
       return;
@@ -139,9 +139,11 @@ export function StopPrompt({ onClose }: StopPromptProps) {
             {saving ? "Saving…" : "Save Entry"}
           </button>
         </div>
-        <p className="text-center text-[10px] text-[var(--text-muted)] mt-2">
-          {formatShortcut(stopShortcut, isMac)} to save
-        </p>
+        {stopShortcut && (
+          <p className="text-center text-[10px] text-[var(--text-muted)] mt-2">
+            {formatShortcut(stopShortcut, isMac)} to save
+          </p>
+        )}
       </div>
     </div>
   );
