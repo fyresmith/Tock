@@ -3,22 +3,42 @@ use std::time::Duration;
 use chrono::{Local, NaiveDateTime};
 use sqlx::SqlitePool;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter, Manager, Wry,
 };
 
 use crate::commands::timer::{discard_timer_impl, start_timer_impl};
 
-pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
-    let menu = build_menu(app.handle(), false)?;
+const TRAY_ID: &str = "tock-tray";
 
-    TrayIconBuilder::with_id("tock-tray")
-        .icon(app.default_window_icon().unwrap().clone())
-        .tooltip("Tock — Ready")
-        .menu(&menu)
+struct TrayMenuState {
+    _menu: Menu<Wry>,
+    status: MenuItem<Wry>,
+    start: MenuItem<Wry>,
+    stop: MenuItem<Wry>,
+    discard: MenuItem<Wry>,
+}
+
+pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
+    let menu_state = build_menu(app.handle())?;
+
+    let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-icon.png"))
+        .expect("tray icon missing");
+
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(tray_icon)
+        .icon_as_template(cfg!(target_os = "macos"))
+        .tooltip("Tock")
+        .title("")
+        .show_menu_on_left_click(false)
+        .menu(&menu_state._menu)
         .on_menu_event(|app, event| {
-            tauri::async_runtime::spawn(handle_menu_event(app.clone(), event.id().as_ref().to_string()));
+            tauri::async_runtime::spawn(handle_menu_event(
+                app.clone(),
+                event.id().as_ref().to_string(),
+            ));
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -27,26 +47,25 @@ pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                show_main_window(tray.app_handle());
             }
         })
         .build(app)?;
 
-    // Close-to-tray
-    let window = app.get_webview_window("main").unwrap();
-    let win = window.clone();
-    window.on_window_event(move |event| {
-        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            let _ = win.hide();
-            api.prevent_close();
-        }
-    });
+    app.manage(menu_state);
 
-    // Background ticker
+    if let Some(window) = app.get_webview_window("main") {
+        let app_handle = app.handle().clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                hide_main_window(&app_handle);
+                api.prevent_close();
+            }
+        });
+    }
+
+    tauri::async_runtime::block_on(update_tray(app.handle()));
+
     let handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
@@ -59,32 +78,31 @@ pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-fn build_menu(app: &AppHandle, has_active: bool) -> tauri::Result<Menu<tauri::Wry>> {
+fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenuState> {
     let menu = Menu::new(app)?;
-
-    if has_active {
-        let status = MenuItem::with_id(app, "status", "● Recording", false, None::<&str>)?;
-        menu.append(&status)?;
-        menu.append(&PredefinedMenuItem::separator(app)?)?;
-        let stop = MenuItem::with_id(app, "stop", "Stop…", true, None::<&str>)?;
-        let discard = MenuItem::with_id(app, "discard", "Discard", true, None::<&str>)?;
-        menu.append(&stop)?;
-        menu.append(&discard)?;
-    } else {
-        let status = MenuItem::with_id(app, "status", "○  Tock — Ready", false, None::<&str>)?;
-        menu.append(&status)?;
-        menu.append(&PredefinedMenuItem::separator(app)?)?;
-        let start = MenuItem::with_id(app, "start", "Start Timer", true, None::<&str>)?;
-        menu.append(&start)?;
-    }
-
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    let status = MenuItem::with_id(app, "status", "○ Tock — Ready", false, None::<&str>)?;
+    let start = MenuItem::with_id(app, "start", "Start Timer", true, None::<&str>)?;
+    let stop = MenuItem::with_id(app, "stop", "Stop…", false, None::<&str>)?;
+    let discard = MenuItem::with_id(app, "discard", "Discard", false, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", "Show Tock", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+    menu.append(&status)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&start)?;
+    menu.append(&stop)?;
+    menu.append(&discard)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
     menu.append(&show)?;
     menu.append(&quit)?;
 
-    Ok(menu)
+    Ok(TrayMenuState {
+        _menu: menu,
+        status,
+        start,
+        stop,
+        discard,
+    })
 }
 
 async fn handle_menu_event(app: AppHandle, id: String) {
@@ -94,15 +112,11 @@ async fn handle_menu_event(app: AppHandle, id: String) {
             let _ = start_timer_impl(pool.inner(), &app, None).await;
         }
         "stop" => {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            show_main_window(&app);
             let _ = app.emit("tray-stop-requested", ());
         }
         "discard" => {
             let pool = app.state::<SqlitePool>();
-            // Find active entry id
             let result: Option<(String,)> = sqlx::query_as(
                 "SELECT id FROM time_entries WHERE end_time IS NULL ORDER BY created_at DESC LIMIT 1",
             )
@@ -116,10 +130,7 @@ async fn handle_menu_event(app: AppHandle, id: String) {
             }
         }
         "show" => {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            show_main_window(&app);
         }
         "quit" => {
             app.exit(0);
@@ -142,7 +153,7 @@ pub async fn update_tray(app: &AppHandle) {
     .ok()
     .flatten();
 
-    let tray = match app.tray_by_id("tock-tray") {
+    let tray = match app.tray_by_id(TRAY_ID) {
         Some(t) => t,
         None => return,
     };
@@ -150,15 +161,39 @@ pub async fn update_tray(app: &AppHandle) {
     if let Some((date, start_time)) = entry {
         let elapsed = compute_elapsed(&date, &start_time);
         let tooltip = format!("Tock — Recording {elapsed}");
-        let _ = tray.set_tooltip(Some(&tooltip));
-        if let Ok(menu) = build_menu(app, true) {
-            let _ = tray.set_menu(Some(menu));
-        }
+        let _ = tray.set_title(Some(elapsed.as_str()));
+        let _ = tray.set_tooltip(Some(tooltip.as_str()));
+        sync_menu_state(app, &format!("● Recording {elapsed}"), true);
     } else {
+        let _ = tray.set_title(Some(""));
         let _ = tray.set_tooltip(Some("Tock — Ready"));
-        if let Ok(menu) = build_menu(app, false) {
-            let _ = tray.set_menu(Some(menu));
-        }
+        sync_menu_state(app, "○ Tock — Ready", false);
+    }
+}
+
+fn sync_menu_state(app: &AppHandle, status_text: &str, has_active: bool) {
+    if let Some(state) = app.try_state::<TrayMenuState>() {
+        let _ = state.status.set_text(status_text);
+        let _ = state.start.set_enabled(!has_active);
+        let _ = state.stop.set_enabled(has_active);
+        let _ = state.discard.set_enabled(has_active);
+    }
+}
+
+pub fn show_main_window(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    let _ = app.show();
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
     }
 }
 
@@ -174,4 +209,3 @@ fn compute_elapsed(date: &str, start_time: &str) -> String {
     let s = secs % 60;
     format!("{h}:{m:02}:{s:02}")
 }
-
