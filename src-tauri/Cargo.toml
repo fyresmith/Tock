@@ -1,6 +1,6 @@
 [package]
 name = "tock"
-version = "0.2.0"
+version = "0.5.1"
 description = "Tock — Personal Time Tracker & Invoice Generator"
 authors = ["Caleb Smith"]
 edition = "2021"
