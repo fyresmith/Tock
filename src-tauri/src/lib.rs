@@ -38,10 +38,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
                 backup::apply_pending_restore(&app_handle)
@@ -112,10 +108,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle, event| {
+    app.run(|_app_handle, _event| {
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Reopen { .. } = event {
-            tray::show_main_window(app_handle);
+        if let tauri::RunEvent::Reopen { .. } = _event {
+            tray::show_main_window(_app_handle);
         }
     });
 }

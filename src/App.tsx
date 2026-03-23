@@ -11,7 +11,6 @@ import { SettingsView } from "./components/settings/SettingsView";
 import { StopPrompt } from "./components/timer/StopPrompt";
 import { ProfileSetupPrompt } from "./components/app/ProfileSetupPrompt";
 import { useTimerStore } from "./stores/timerStore";
-import { useUpdaterStore } from "./stores/updaterStore";
 import { useSettings } from "./hooks/useSettings";
 import { useTimerSync } from "./hooks/useTimerSync";
 import { startTimer } from "./lib/commands";
@@ -42,7 +41,6 @@ export function App() {
     }
   });
   const { isRunning, setActiveEntry } = useTimerStore();
-  const runStartupUpdateCheck = useUpdaterStore((state) => state.runStartupCheck);
   const { settings } = useSettings();
   useTimerSync();
 
@@ -72,11 +70,6 @@ export function App() {
       document.documentElement.classList.remove("light");
     }
   }, [settings?.theme]);
-
-  useEffect(() => {
-    if (!settings) return;
-    runStartupUpdateCheck(settings.auto_update_enabled).catch(console.error);
-  }, [runStartupUpdateCheck, settings]);
 
   useEffect(() => {
     if (!settings || profileSetupIncomplete) return;

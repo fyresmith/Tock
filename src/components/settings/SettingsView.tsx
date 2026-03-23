@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { useTags } from "../../hooks/useTags";
 import { useClients } from "../../hooks/useClients";
-import { useUpdaterStore } from "../../stores/updaterStore";
 import {
   type BackupSummary,
   type Client,
@@ -1847,12 +1846,6 @@ function DataSettingsSection({
   const [backupStatus, setBackupStatus] = useState<StatusMessageState>(null);
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(true);
-  const currentVersion = useUpdaterStore((state) => state.currentVersion);
-  const latestVersion = useUpdaterStore((state) => state.latestVersion);
-  const updaterBusy = useUpdaterStore((state) => state.isBusy);
-  const updaterStatus = useUpdaterStore((state) => state.status);
-  const ensureCurrentVersion = useUpdaterStore((state) => state.ensureCurrentVersion);
-  const checkForUpdates = useUpdaterStore((state) => state.checkForUpdates);
 
   const loadBackups = async () => {
     try {
@@ -1868,10 +1861,6 @@ function DataSettingsSection({
   useEffect(() => {
     loadBackups().catch(console.error);
   }, []);
-
-  useEffect(() => {
-    ensureCurrentVersion().catch(console.error);
-  }, [ensureCurrentVersion]);
 
   const handleExportNow = async () => {
     try {
@@ -1968,52 +1957,8 @@ function DataSettingsSection({
     }
   };
 
-  const handleCheckForUpdates = async () => {
-    await checkForUpdates({
-      source: "manual",
-      silentNoUpdate: false,
-      silentErrors: false,
-    });
-  };
-
   return (
     <div className="space-y-4">
-      <SettingsSectionCard
-        title="App Updates"
-        description="Check for published GitHub releases and install stable updates inside Tock."
-      >
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <SettingsStat label="Installed Version" value={currentVersion || "Loading…"} />
-            <SettingsStat label="Latest Seen" value={latestVersion ?? "Not checked yet"} />
-          </div>
-
-          <SettingsField
-            label="Automatic update checks"
-            description="Check once after launch and prompt before downloading a newer published version."
-          >
-            <button
-              onClick={() => update("auto_update_enabled", settings.auto_update_enabled ? "0" : "1")}
-              className={buttonClass("secondary")}
-            >
-              {settings.auto_update_enabled ? "Enabled" : "Disabled"}
-            </button>
-          </SettingsField>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleCheckForUpdates}
-              disabled={updaterBusy}
-              className={`${buttonClass("primary")} disabled:opacity-50`}
-            >
-              {updaterBusy ? "Working…" : "Check for Updates"}
-            </button>
-          </div>
-
-          <SettingsStatusMessage status={updaterStatus} />
-        </div>
-      </SettingsSectionCard>
-
       <SettingsSectionCard
         title="Backup Storage"
         description="Full app backups are stored here automatically and when you create one manually."
